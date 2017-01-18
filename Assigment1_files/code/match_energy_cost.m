@@ -1,16 +1,8 @@
-function cost= match_energy_cost(L, part, seq)
+function cost= match_energy_cost(L, part, dat_pt)
 % L --> [x, y, theta, scale]  end points of the query stick  
 % part is the query part, 1=torso, 2=left upper arm, 3=right upper arm, 4=left lower arm, 5=right lower arm, 6= head
 % using the model lengths as per the presentation
 
-model_len = [160, 95, 95, 65, 65, 60];
-
-% Read in the annotations
-% lF: 1 x 76 struct: <frame_id, coor 4x6 double>
-lF = ReadStickmenAnnotationTxt('../data/buffy_s5e2_sticks.txt');
-
-% seq is the frame_id of this image
-dat_pt = lF(seq).stickmen.coor(:,part);
 if part>1 && part <6
     % compute the error between L and each arm part
     % ???
@@ -35,18 +27,18 @@ dat_x = mean([dat_pt(1) dat_pt(3)]);
 dat_y = mean([dat_pt(2) dat_pt(4)]);
 dat_theta = atan((dat_pt(2)-dat_pt(4))/(dat_pt(1)-dat_pt(3)));
 
-% normalize theta to [-pi/2, pi/2]
-if part==1 || part ==6
+% special treatment of head and torso
+if part==1 || part ==6 % ???
     if dat_theta < 0
         dat_theta = dat_theta+pi/2;
     else
         dat_theta = dat_theta-pi/2;
     end
 end
-
 % compute the scale (observed_len / model_len)
 dat_scale = sqrt(sum([dat_pt(1)-dat_pt(3),dat_pt(2)-dat_pt(4)].^2))/model_len(part);
 dat_val = [dat_x, dat_y, dat_theta, dat_scale]; % GT annotation grouped in [x, y, theta, scale manner]
 diff = (dat_val-L).*[0.5 0.5 100 100];
 cost = sum(diff.^2);
+
 end
