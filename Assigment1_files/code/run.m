@@ -12,7 +12,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % specify and read in the image
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-img_seq = 1;  % the sequence of the image in the folder
+img_seq = 1;  % the sequence (index) of the image in the folder
 img_id  = 63; % the id of the image filename
 img_filename  = sprintf('%06d.jpg', img_id);
 img_directory = fullfile('..', 'buffy_s5e2_original', img_filename);
@@ -29,15 +29,19 @@ dat_pt = lF(img_seq).stickmen.coor;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 opt.scan_nsample = []; % step size for (x,y,theta,s) search
-opt.scan_nsample.x = 40;
-opt.scan_nsample.y = 40;
+opt.scan_nsample.x = 50;
+opt.scan_nsample.y = 50;
 opt.scan_nsample.theta = 20;
-opt.scan_nsample.s = 30;
+opt.scan_nsample.s = 16;
+
+opt.k = []; % compensate value for D pass through 
+opt.k.x = 0;
+opt.k.y = 0;
+opt.k.theta = 0;
+opt.k.s = 0;
 
 opt.model_len = [160, 95, 95, 65, 65, 60]; % length of model part measured in pixels
                                            % [torso, upper_arm_r, upper_arm_l, lower_arm_r, lower_arm_l, head]
-                                           
-% TODO: understand and specify kx. ky, ktheta and ks
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % specify struct for each part
@@ -90,9 +94,12 @@ head.B = zeros(size(torso.B));
 upper_arm_r.B = zeros(size(torso.B));
 upper_arm_l.B = zeros(size(torso.B));
 
-fprintf('Initializing D using f(w) for all leave nodes\n');
+fprintf('Initializing D using f(w) for all leave nodes...\n');
 for x_ind = 1 : length(lj_x_grid)
-    fprintf('Progress: %d/%d...\n', x_ind, length(lj_x_grid));
+    
+    % display progress
+    fprintf('Progress: %.0f%%\n', 100*x_ind/length(lj_x_grid)); 
+    
     for y_ind = 1 : length(lj_y_grid)
         for theta_ind = 1 : length(lj_theta_grid)
             for s_ind = 1 : length(lj_s_grid)
@@ -113,3 +120,121 @@ for x_ind = 1 : length(lj_x_grid)
         end
     end
 end
+
+%% Compute minimum distance in D
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Forward pass through D to find the minimum value
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+fprintf('\nForward pass through D for all leave nodes...\n');
+for x_ind = 1 : length(lj_x_grid)
+    
+    % display progress
+    if (mod(x_ind,5) == 0) 
+        fprintf('Progress: %.0f%%\n', 100*x_ind/length(lj_x_grid)); 
+    end
+    
+    for y_ind = 1 : length(lj_y_grid)
+        for theta_ind = 1 : length(lj_theta_grid)
+            for s_ind = 1 : length(lj_s_grid)
+                
+                % initialize neighbor vectors
+                head_neighbors = Inf(1, 5);
+                upper_arm_r_neighbors = Inf(1, 5);
+                upper_arm_l_neighbors = Inf(1, 5);
+                
+                % retrieve neighboring elements
+                head_neighbors(1) = head.B(x_ind, y_ind, theta_ind, s_ind);
+                upper_arm_r_neighbors(1) = upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
+                upper_arm_l_neighbors(1) = upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
+                
+                if (x_ind+1 <= opt.scan_nsample.x) % neighbor in x dimension
+                    head_neighbors(2) = head.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
+                    upper_arm_r_neighbors(2) = upper_arm_r.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
+                    upper_arm_l_neighbors(2) = upper_arm_l.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
+                end
+                if (y_ind+1 <= opt.scan_nsample.y) % neighbor in y dimension
+                    head_neighbors(3) = head.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
+                    upper_arm_r_neighbors(3) = upper_arm_r.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
+                    upper_arm_l_neighbors(3) = upper_arm_l.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
+                end
+                if (theta_ind+1 <= opt.scan_nsample.theta) % neighbor in theta dimension
+                    head_neighbors(4) = head.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
+                    upper_arm_r_neighbors(4) = upper_arm_r.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
+                    upper_arm_l_neighbors(4) = upper_arm_l.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
+                end
+                if (s_ind+1 <= opt.scan_nsample.s) % neighbor in s dimension
+                    head_neighbors(5) = head.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
+                    upper_arm_r_neighbors(5) = upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
+                    upper_arm_l_neighbors(5) = upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
+                end
+                
+                % obtain the min value
+                head.B(x_ind, y_ind, theta_ind, s_ind) = min(head_neighbors);
+                upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind) = min(upper_arm_r_neighbors);
+                upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind) = min(upper_arm_l_neighbors);
+                
+            end
+        end
+    end
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Backward pass through D to find the minimum value
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+fprintf('\nBackward pass through D for all leave nodes...\n');
+for x_ind = length(lj_x_grid) : -1 : 1
+    
+    % display progress
+    if (mod(x_ind,5) == 0) 
+        fprintf('Progress: %.0f%%\n', 100*(length(lj_x_grid)-x_ind+1)/length(lj_x_grid)); 
+    end
+    
+    for y_ind = length(lj_y_grid) : -1 : 1
+        for theta_ind = length(lj_theta_grid) : -1 : 1
+            for s_ind = length(lj_s_grid) : -1 : 1
+                
+                % initialize neighbor vectors
+                head_neighbors = Inf(1, 5);
+                upper_arm_r_neighbors = Inf(1, 5);
+                upper_arm_l_neighbors = Inf(1, 5);
+                
+                % retrieve neighboring elements
+                head_neighbors(1) = head.B(x_ind, y_ind, theta_ind, s_ind);
+                upper_arm_r_neighbors(1) = upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
+                upper_arm_l_neighbors(1) = upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
+                
+                if (x_ind-1 >= 1) % neighbor in x dimension
+                    head_neighbors(2) = head.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
+                    upper_arm_r_neighbors(2) = upper_arm_r.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
+                    upper_arm_l_neighbors(2) = upper_arm_l.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
+                end
+                if (y_ind-1 >= 1) % neighbor in y dimension
+                    head_neighbors(3) = head.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
+                    upper_arm_r_neighbors(3) = upper_arm_r.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
+                    upper_arm_l_neighbors(3) = upper_arm_l.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
+                end
+                if (theta_ind-1 >= 1) % neighbor in theta dimension
+                    head_neighbors(4) = head.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
+                    upper_arm_r_neighbors(4) = upper_arm_r.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
+                    upper_arm_l_neighbors(4) = upper_arm_l.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
+                end
+                if (s_ind-1 >= 1) % neighbor in s dimension
+                    head_neighbors(5) = head.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
+                    upper_arm_r_neighbors(5) = upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
+                    upper_arm_l_neighbors(5) = upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
+                end
+                
+                % obtain the min value
+                head.B(x_ind, y_ind, theta_ind, s_ind) = min(head_neighbors);
+                upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind) = min(upper_arm_r_neighbors);
+                upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind) = min(upper_arm_l_neighbors);
+                
+            end
+        end
+    end
+end
+
+
