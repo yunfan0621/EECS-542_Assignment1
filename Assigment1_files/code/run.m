@@ -1,4 +1,4 @@
-clc; close all;
+clc; close all; clear all;
 
 %% Startup Commands
 startup_flag = 1;
@@ -63,7 +63,7 @@ upper_arm_l = struct('name',        'upper_arm_l',...
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 lj_x_grid = linspace(1, n, opt.scan_nsample.x);
 lj_y_grid = linspace(1, m, opt.scan_nsample.y);
-lj_theta_grid = linspace(-pi/2, pi/2, opt.scan_nsample.theta); % normalization???
+lj_theta_grid = linspace(-pi, pi, opt.scan_nsample.theta); % normalization???
 lj_s_grid = linspace(opt.scan_nsample.s_min, opt.scan_nsample.s_max, opt.scan_nsample.s);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
