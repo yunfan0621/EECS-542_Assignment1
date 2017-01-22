@@ -8,9 +8,10 @@ if part>1 && part <6
     % ???
     val1 = calc_val(dat_pt,L,2);
     val2 = calc_val(dat_pt,L,3);
-    val3 = calc_val(dat_pt,L,4);
-    val4 = calc_val(dat_pt,L,5);
-    cost = min([val1, val2, val3, val4]);
+    % val3 = calc_val(dat_pt,L,4);
+    % val4 = calc_val(dat_pt,L,5);
+    %cost = min([val1, val2, val3, val4]);
+    cost = min([val1, val2]);
 else
     cost = calc_val(dat_pt,L,part);
 end

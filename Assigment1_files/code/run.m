@@ -1,7 +1,7 @@
 clc; close all;
 
 %% Startup Commands
-startup_flag = 0;
+startup_flag = 1;
 if startup_flag
     installmex;
     startup;
@@ -32,7 +32,7 @@ opt.scan_nsample = []; % step size for (x,y,theta,s) search
 opt.scan_nsample.x = 50;
 opt.scan_nsample.y = 50;
 opt.scan_nsample.theta = 20;
-opt.scan_nsample.s = 16;
+opt.scan_nsample.s = 20;
 
 opt.k = []; % compensate value for D pass through 
 opt.k.x = 0;
@@ -51,31 +51,39 @@ torso = struct('name',        'torso',...
                'part_id',     1,...
                'parent_id',   -1,...
                'children_id', [2, 3, 4],...
-               'B',          []); % root node
+               'B',           [],...
+               'L',           [],...
+               'coor',        []); % root node
 
 head  = struct('name',        'head',...
                'id',          2,...
                'part_id',     6,...
                'parent_id',   1,...
                'children_id', [],...
-               'B',          []); % leaf node
+               'B',           [],...
+               'L',           [],...
+               'coor',        []); % leaf node
 
 upper_arm_r = struct('name',        'upper_arm_r',...
                      'id',          3,...
                      'part_id',     3,...
                      'parent_id',   1,...
                      'children_id', [],...
-                     'B',          []); % leaf node
+                     'B',           [],...
+                     'L',           [],...
+                     'coor',        []); % leaf node
                  
 upper_arm_l = struct('name',        'upper_arm_l',...
                      'id',          4,...
                      'part_id',     2,...
                      'parent_id',   1,...
                      'children_id', [],...
-                     'B',          []); % leaf node
+                     'B',           [],...
+                     'L',           [],...
+                     'coor',        []); % leaf node
 T = [torso, head, upper_arm_r, upper_arm_l];
 
-%% Compute f(w) for distance transformation
+%% Compute f(w) for distance transformation and initialize D for leave nodes
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%
 % compute the grid for lj
@@ -83,13 +91,12 @@ T = [torso, head, upper_arm_r, upper_arm_l];
 lj_x_grid = linspace(1, n, opt.scan_nsample.x);
 lj_y_grid = linspace(1, m, opt.scan_nsample.y);
 lj_theta_grid = linspace(-pi/2, pi/2, opt.scan_nsample.theta); % inclusive???
-lj_s_grid = linspace(0.5, 2, opt.scan_nsample.s); % reasonable???
+lj_s_grid = linspace(0.1, 2, opt.scan_nsample.s); % reasonable???
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % initializing D using f(w) for all leave node
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-torso.B = zeros(opt.scan_nsample.x, opt.scan_nsample.y, opt.scan_nsample.theta, opt.scan_nsample.s);
 head.B = zeros(size(torso.B));
 upper_arm_r.B = zeros(size(torso.B));
 upper_arm_l.B = zeros(size(torso.B));
@@ -121,7 +128,7 @@ for x_ind = 1 : length(lj_x_grid)
     end
 end
 
-%% Compute minimum distance in D
+%% Compute minimum distance in D for leave nodes
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Forward pass through D to find the minimum value
@@ -236,5 +243,151 @@ for x_ind = length(lj_x_grid) : -1 : 1
         end
     end
 end
+
+%% Compute f(w) for distance transformation and initialize D for root node
+
+torso.B = zeros(opt.scan_nsample.x, opt.scan_nsample.y, opt.scan_nsample.theta, opt.scan_nsample.s);
+
+fprintf('Initializing D using f(w) for all leave nodes...\n');
+for x_ind = 1 : length(lj_x_grid)
+    
+    % display progress
+    fprintf('Progress: %.0f%%\n', 100*x_ind/length(lj_x_grid)); 
+    
+    for y_ind = 1 : length(lj_y_grid)
+        for theta_ind = 1 : length(lj_theta_grid)
+            for s_ind = 1 : length(lj_s_grid)
+                
+                % retrieve the coordinate and energy of leave nodes
+                x = lj_x_grid(x_ind);
+                y = lj_y_grid(y_ind);
+                s = lj_s_grid(s_ind);
+                theta = lj_theta_grid(theta_ind);
+                
+                L = [x, y, theta, s];
+                head_energy = head.B(x_ind, y_ind, theta_ind, s_ind);
+                upper_arm_r_energy = upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
+                upper_arm_l_energy = upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
+                
+                % compute the total energy
+                torso.B(x_ind, y_ind, theta_ind, s_ind) = ...
+                    match_energy_cost(L, torso.part_id, dat_pt(:,torso.part_id)) + ...
+                    head_energy + upper_arm_r_energy + upper_arm_r_energy;  
+            end
+        end
+    end
+end
+
+%% Compute minimum distance in D for root node
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Forward pass through D to find the minimum value
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+fprintf('\nForward pass through D for the root node...\n');
+
+% keep track of the lowest energy and the associated configuration
+torso_opt_L = [1, 1, 1, 1];
+torso_opt_E = Inf;
+for x_ind = 1 : length(lj_x_grid)
+    
+    % display progress
+    if (mod(x_ind,5) == 0) 
+        fprintf('Progress: %.0f%%\n', 100*x_ind/length(lj_x_grid)); 
+    end
+    
+    for y_ind = 1 : length(lj_y_grid)
+        for theta_ind = 1 : length(lj_theta_grid)
+            for s_ind = 1 : length(lj_s_grid)
+                
+                % initialize neighbor vectors
+                neighbors = Inf(1, 5);
+                
+                % retrieve neighboring elements
+                neighbors(1) = head.B(x_ind, y_ind, theta_ind, s_ind);
+                
+                if (x_ind+1 <= opt.scan_nsample.x) % neighbor in x dimension
+                    neighbors(2) = torso.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
+                end
+                if (y_ind+1 <= opt.scan_nsample.y) % neighbor in y dimension
+                    neighbors(3) = torso.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
+                end
+                if (theta_ind+1 <= opt.scan_nsample.theta) % neighbor in theta dimension
+                    neighbors(4) = torso.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
+                end
+                if (s_ind+1 <= opt.scan_nsample.s) % neighbor in s dimension
+                    neighbors(5) = torso.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
+                end
+                
+                % obtain the min value
+                torso.B(x_ind, y_ind, theta_ind, s_ind) = min(neighbors);
+                
+                % update the min value and coordinate
+                if (torso.B(x_ind, y_ind, theta_ind, s_ind) < torso_opt_E)
+                    torso_opt_L = [x_ind, y_ind, theta_ind, s_ind];
+                    torso_opt_E = torso.B(x_ind, y_ind, theta_ind, s_ind);
+                end
+            end
+        end
+    end
+end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Backward pass through D to find the minimum value
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% do not initialize minimum value and coordinate at this time
+fprintf('\nBackward pass through D for all leave nodes...\n');
+for x_ind = length(lj_x_grid) : -1 : 1
+    
+    % display progress
+    if (mod(x_ind,5) == 0) 
+        fprintf('Progress: %.0f%%\n', 100*(length(lj_x_grid)-x_ind+1)/length(lj_x_grid)); 
+    end
+    
+    for y_ind = length(lj_y_grid) : -1 : 1
+        for theta_ind = length(lj_theta_grid) : -1 : 1
+            for s_ind = length(lj_s_grid) : -1 : 1
+                
+                % initialize neighbor vectors
+                neighbors = Inf(1, 5);
+                
+                % retrieve neighboring elements
+                neighbors(1) = head.B(x_ind, y_ind, theta_ind, s_ind);
+                
+                if (x_ind-1 >= 1) % neighbor in x dimension
+                    neighbors(2) = torso.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
+                end
+                if (y_ind-1 >= 1) % neighbor in y dimension
+                    neighbors(3) = torso.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
+                end
+                if (theta_ind-1 >= 1) % neighbor in theta dimension
+                    neighbors(4) = torso.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
+                end
+                if (s_ind-1 >= 1) % neighbor in s dimension
+                    neighbors(5) = torso.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
+                end
+                
+                % obtain the min value
+                torso.B(x_ind, y_ind, theta_ind, s_ind) = min(neighbors);
+                
+                % update the min value and coordinate
+                if (torso.B(x_ind, y_ind, theta_ind, s_ind) < torso_opt_E)
+                    torso_opt_L = [x_ind, y_ind, theta_ind, s_ind];
+                    torso_opt_E = torso.B(x_ind, y_ind, theta_ind, s_ind);
+                end
+                
+            end
+        end
+    end
+end
+
+%% Obtain the coordinate of each node
+% torso
+torso_x = lj_x_grid(torso_opt_L(1));
+torso_y = lj_y_grid(torso_opt_L(2));
+torso_theta = lj_theta_grid(torso_opt_L(3));
+torso_s = lj_s_grid(torso_opt_L(4));
+
 
 
