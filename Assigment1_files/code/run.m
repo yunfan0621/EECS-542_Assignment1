@@ -50,33 +50,35 @@ upper_arm_l = struct('name',        'upper_arm_l',...
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % specify hyper-parameters
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+set_opt; % Create parameter struct opt
+
 [m, n, ~] = size(img);
-
-set_opt;
-
-%% Compute f(w) for distance transformation and initialize D for leave nodes
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% compute the grid for lj
-%%%%%%%%%%%%%%%%%%%%%%%%%%%
 x_grid = linspace(1, n, opt.scan_nsample.x);
 y_grid = linspace(1, m, opt.scan_nsample.y);
 theta_grid = linspace(-pi, pi, opt.scan_nsample.theta); % normalization???
 s_grid = linspace(opt.scan_nsample.s_min, opt.scan_nsample.s_max, opt.scan_nsample.s);
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% initializing D using f(w) for all leave node
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% assign spaces for N-D arrays
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% B(li) = min(D(Tij(li))), the minimum distance indexed by li
 torso.B = zeros(opt.scan_nsample.x, opt.scan_nsample.y, opt.scan_nsample.theta, opt.scan_nsample.s);
 head.B  = zeros(size(torso.B));
 upper_arm_r.B = zeros(size(torso.B));
 upper_arm_l.B = zeros(size(torso.B));
 
+% Bj_p(li) = argmin(D(Tij(li))), the lj associated with the minimum
+% distance (propagated)
 torso.Bj_p = cell(opt.scan_nsample.x, opt.scan_nsample.y, opt.scan_nsample.theta, opt.scan_nsample.s);
 head.Bj_p  = cell(size(torso.B));
 upper_arm_r.Bj_p = cell(size(torso.B));
 upper_arm_l.Bj_p = cell(size(torso.B));
 
+%% Compute f(w) for distance transformation and initialize D for leave nodes
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% initializing D using f(w) for all leave node
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 fprintf('Initializing D using f(w) for all leave nodes...\n');
 for x_ind = 1 : length(x_grid)
     
