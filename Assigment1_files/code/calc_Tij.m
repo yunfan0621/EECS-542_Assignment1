@@ -1,30 +1,32 @@
-function Tij = calc_Tij(Li, i, j, opt)
-% calc_Tij calculates the value of Tij(li) given the specified li
-% the origin is located at i th part
+function Tij = calc_Tij(i, j, x_grid, y_grid, theta_grid, s_grid, opt)
 
-% get the observed value
-x_i = Li(1);
-y_i = Li(2);
-theta_i = Li(3);
-s_i = Li(4);
+% compute theta_i' and s_i' for computing Tij_xy
+Tij_theta = opt.wij.theta * (theta_grid - opt.model.theta_ij(i, j));
+Tij_s     = opt.wij.s * (log(s_grid) - log(opt.model.s_ij(i, j)));
 
-% get the relative value and the joint coordinate
-% Note the order of i & j when using the relative values
-x_ij = opt.model.x_ij(i, j);
-y_ij = opt.model.y_ij(i, j);
-theta_ij = opt.model.theta_ij(i, j);
-s_ij = opt.model.s_ij(i, j);
+% compute theta' and s' for Tij
+vec_theta_s = combvec(theta_grid, s_grid); % All combinations of (theta, s)
+R_theta_s = zeros(2*length(vec_theta_s));  % a large matrix storing the rotation matrices for combinations of (theta, s)
+for k = 1 : length(vec_theta_s)
+    % for every combination of (theta, s)
+    theta_tmp = vec_theta_s(1, k);
+    s_tmp     = vec_theta_s(2, k);
+    R_theta_i_tmp = s_tmp * [cos(theta_tmp), -sin(theta_tmp); sin(theta_tmp), cos(theta_tmp)];
+    R_theta_s((2*k-1):2*k, (2*k-1):2*k) = R_theta_i_tmp;
+end
 
+% deal with the coordinate of Tij
+joint_xy_frame = repmat([opt.model.x_ij(i, j); opt.model.y_ij(i, j)], length(vec_theta_s), 1);
+joint_xy_frame_rotate = R_theta_s * joint_xy_frame;
+joint_xy_frame_rotate = [joint_xy_frame_rotate(1:2:end)'; joint_xy_frame_rotate(2:2:end)'];
+center_xy_world = combvec(x_grid, y_grid);
+Tij_xy = combvec(center_xy_world, joint_xy_frame_rotate);
 W_ij = diag([opt.wij.x, opt.wij.y]);
-R_theta_i = [cos(theta_i), -sin(theta_i); sin(theta_i), cos(theta_i)];
+Tij_xy = W_ij * [1,0,1,0; 0,1,0,1] * Tij_xy; % add up the center point proposals and the rotated and scaled joints
 
-% compute coordinate for Tij(li)
-theta_p_i = opt.wij.theta * (theta_i - theta_ij/2);
-s_p_i  = opt.wij.s * (log(s_i) - log(s_ij)/2);
-xy_p_i = W_ij * ([x_i, y_i]' + s_i * R_theta_i * [x_ij, y_ij]');
-xy_p_i = xy_p_i';
-
-Tij = [xy_p_i, theta_p_i, s_p_i];
+% obtain the final combination of theta and s
+Tij_theta_s = combvec(combvec(combvec(x_grid, y_grid), Tij_theta), Tij_s);
+Tij = [Tij_xy; Tij_theta_s(3:4,:)];
 
 end
 
