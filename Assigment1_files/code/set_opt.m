@@ -63,7 +63,7 @@ opt.model.s_ij(upper_arm_r.part_id, torso.part_id) = 1;
 % upper_arm_l (li) -> torso (lj)
 opt.model.x_ij(upper_arm_l.part_id, torso.part_id) = 47.5;
 opt.model.y_ij(upper_arm_l.part_id, torso.part_id) = 0;
-opt.model.theta_ij(upper_arm_l.part_id, torso.part_id) = +pi/2;
+opt.model.theta_ij(upper_arm_l.part_id, torso.part_id) = -pi/2;
 % opt.model.s_ij(upper_arm_l.part_id, torso.part_id) = opt.model.len(upper_arm_l.part_id) / opt.model.len(torso.part_id);
 opt.model.s_ij(upper_arm_l.part_id, torso.part_id) = 1;
 

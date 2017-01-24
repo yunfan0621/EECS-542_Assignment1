@@ -9,8 +9,8 @@ startup;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % specify and read in the image
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-img_seq = 1;  % the sequence (index) of the image in the folder
-img_id  = 63; % the id of the image filename
+img_seq = 35;  % the sequence (index) of the image in the folder
+img_id  = 7526; % the id of the image filename
 img_filename  = sprintf('%06d.jpg', img_id);
 img_directory = fullfile('..', 'buffy_s5e2_original', img_filename);
 img = imread(img_directory);
@@ -491,6 +491,44 @@ torso_x = x_grid(torso_opt_L(1));
 torso_y = y_grid(torso_opt_L(2));
 torso_theta = theta_grid(torso_opt_L(3));
 torso_s = s_grid(torso_opt_L(4));
+torso_corr = [torso_x - torso_s*opt.model.len(1)/2*cos(torso_theta); ...
+    torso_x + torso_s*opt.model.len(1)/2*cos(torso_theta); ...
+    torso_y - torso_s*opt.model.len(1)/2*sin(torso_theta); ...
+    torso_y + torso_s*opt.model.len(1)/2*sin(torso_theta)];
+
+% left-upper arm
+upper_arm_l_corr = upper_arm_l.Bj_p{torso_opt_L(1), torso_opt_L(2), torso_opt_L(3), torso_opt_L(4)};
+upper_arm_l_corr = [upper_arm_l_corr(1) - upper_arm_l_corr(4)*opt.model.len(2)/2*cos(upper_arm_l_corr(3)); ...
+    upper_arm_l_corr(1) + upper_arm_l_corr(4)*opt.model.len(2)/2*cos(upper_arm_l_corr(3)); ...
+    upper_arm_l_corr(2) - upper_arm_l_corr(4)*opt.model.len(2)/2*sin(upper_arm_l_corr(3)); ...
+    upper_arm_l_corr(2) + upper_arm_l_corr(4)*opt.model.len(2)/2*sin(upper_arm_l_corr(3))];
+
+% right-upper arm
+upper_arm_r_corr = upper_arm_r.Bj_p{torso_opt_L(1), torso_opt_L(2), torso_opt_L(3), torso_opt_L(4)};
+upper_arm_r_corr = [upper_arm_r_corr(1) - upper_arm_r_corr(4)*opt.model.len(3)/2*cos(upper_arm_r_corr(3)); ...
+    upper_arm_r_corr(1) + upper_arm_r_corr(4)*opt.model.len(3)/2*cos(upper_arm_r_corr(3)); ...
+    upper_arm_r_corr(2) - upper_arm_r_corr(4)*opt.model.len(3)/2*sin(upper_arm_r_corr(3)); ...
+    upper_arm_r_corr(2) + upper_arm_r_corr(4)*opt.model.len(3)/2*sin(upper_arm_r_corr(3))];
+
+% head
+head_corr = head.Bj_p{torso_opt_L(1), torso_opt_L(2), torso_opt_L(3), torso_opt_L(4)};
+head_corr = [head_corr(1) - head_corr(4)*opt.model.len(6)/2*cos(head_corr(3)); ...
+    head_corr(1) + head_corr(4)*opt.model.len(6)/2*cos(head_corr(3)); ...
+    head_corr(2) - head_corr(4)*opt.model.len(6)/2*sin(head_corr(3)); ...
+    head_corr(2) + head_corr(4)*opt.model.len(6)/2*sin(head_corr(3))];
+
+% 4 part corr
+total_corr = [torso_corr upper_arm_l_corr upper_arm_r_corr head_corr];
+
+% Draw stickman
+colors = [0.99 0 0 0; 0 0.99 0.99 0; 0 0 0 0.99]; 
+% torso - red; arms - green; head - blue
+thickness = 4;
+drawidx = true;
+drawfullskeleton = 1;
+hdl = DrawStickman(total_corr, img, colors, thickness, drawidx);
+
+
 
 % %% Compute minimum distance in D for root node
 % 
