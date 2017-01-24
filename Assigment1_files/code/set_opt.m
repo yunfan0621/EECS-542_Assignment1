@@ -4,8 +4,8 @@ opt.scan_nsample = [];
 opt.scan_nsample.x = 50;
 opt.scan_nsample.y = 50;
 opt.scan_nsample.theta = 20;
-opt.scan_nsample.s = 20;
-opt.scan_nsample.s_min = 0.1;
+opt.scan_nsample.s = 10;
+opt.scan_nsample.s_min = 0.2;
 opt.scan_nsample.s_max = 2;
 
 % compensate constant value for D pass through 

@@ -2,6 +2,8 @@ clc; close all; clear all;
 
 %% Initialization
 
+fprintf('Initializing...\n');
+
 % Startup command
 installmex;
 startup;
@@ -50,13 +52,21 @@ upper_arm_l = struct('name',        'upper_arm_l',...
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % specify hyper-parameters
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-set_opt; % Create parameter struct opt
+
+% Create parameter struct opt
+set_opt;
 
 [m, n, ~] = size(img);
 x_grid = linspace(1, n, opt.scan_nsample.x);
 y_grid = linspace(1, m, opt.scan_nsample.y);
 theta_grid = linspace(-pi, pi, opt.scan_nsample.theta); % normalization???
 s_grid = linspace(opt.scan_nsample.s_min, opt.scan_nsample.s_max, opt.scan_nsample.s);
+
+% Initialize entire searching space
+search_grid_dim = [opt.scan_nsample.x, opt.scan_nsample.y, opt.scan_nsample.theta, opt.scan_nsample.s];
+search_grid = combvec(combvec(combvec(x_grid, y_grid), theta_grid), s_grid);
+back_search_grid = combvec(combvec(combvec(x_grid(end:-1:1), y_grid(end:-1:1)), theta_grid(end:-1:1)), s_grid(end:-1:1));
+n_search = size(search_grid, 2);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % assign spaces for N-D arrays
@@ -80,372 +90,357 @@ upper_arm_l.Bj_p = cell(size(torso.B));
 % initializing D using f(w) for all leave node
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 fprintf('Initializing D using f(w) for all leave nodes...\n');
-for x_ind = 1 : length(x_grid)
-    
-    % display progress
-    fprintf('Progress: %.0f%%\n', 100*x_ind/length(x_grid)); 
-    
-    for y_ind = 1 : length(y_grid)
-        for theta_ind = 1 : length(theta_grid)
-            for s_ind = 1 : length(s_grid)
-                
-                % retrieve the coordinate
-                x = x_grid(x_ind);
-                y = y_grid(y_ind);
-                s = s_grid(s_ind);
-                theta = theta_grid(theta_ind);
-                
-                L = [x, y, theta, s];
-                
-                % compute the matching cost
-                head.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(L, head.part_id, dat_pt(:,head.part_id));
-                upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(L, upper_arm_r.part_id, dat_pt(:,upper_arm_r.part_id));
-                upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(L, upper_arm_l.part_id, dat_pt(:,upper_arm_l.part_id));                
-            
-                % initialize the Bj_p
-                head.Bj_p{x_ind, y_ind, theta_ind, s_ind} = L;
-                upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind} = L;
-                upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind} = L;
-            end
-        end
+
+for l_ind = 1 : n_search
+    if (mod(l_ind, 50000) == 0)
+        fprintf('f(w) Initialization Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
     end
+    
+    L = search_grid(:, l_ind)';
+    [x_ind, y_ind, theta_ind, s_ind] = ind2sub(search_grid_dim, l_ind);
+
+    head.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(L, head.part_id, dat_pt(:,head.part_id));
+    upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(L, upper_arm_r.part_id, dat_pt(:,upper_arm_r.part_id));
+    upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(L, upper_arm_l.part_id, dat_pt(:,upper_arm_l.part_id)); 
+
+    head.Bj_p{x_ind, y_ind, theta_ind, s_ind} = L;
+    upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind} = L;
+    upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind} = L;
 end
 
-%% Compute minimum distance in D for leave nodes
+% After acceleration + perfor: 17.416040 seconds (with the cost of losing readability)
+% After acceleration:          27.939928 seconds
+% Before acceleration:         51.130546 seconds
+
+%% Compute minimum distance in D for leave nodes (Forward Pass)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Forward pass through D to find the minimum value
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 fprintf('\nForward pass through D for all leave nodes...\n');
-for x_ind = 1 : length(x_grid)
-    
-    % display progress
-    if (mod(x_ind,5) == 0) 
-        fprintf('Progress: %.0f%%\n', 100*x_ind/length(x_grid)); 
+for l_ind = 1 : n_search    
+
+    if (mod(l_ind, 5000) == 0)
+        fprintf('Leave Node Forward Pass Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
     end
     
-    for y_ind = 1 : length(y_grid)
-        for theta_ind = 1 : length(theta_grid)
-            for s_ind = 1 : length(s_grid)
-                
-                % initialize neighbor vectors
-                head_neighbors = Inf(1, 5); % for min value
-                upper_arm_r_neighbors = Inf(1, 5);
-                upper_arm_l_neighbors = Inf(1, 5);
-                
-                head_neighbors_lj = zeros(5, 4); % for argmin value, 5-neighbors
-                upper_arm_r_neighbors_lj = zeros(5, 4);
-                upper_arm_l_neighbors_lj = zeros(5, 4);
-                
-                % retrieve the coordinate
-                x = x_grid(x_ind);
-                y = y_grid(y_ind);
-                s = s_grid(s_ind);
-                theta = theta_grid(theta_ind);
-                
-                Li = [x, y, theta, s]; % Li
-                
-                % retrieve neighboring elements
-                
-                % include itself as well
-                Lj = Li;
-                Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
-                Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
-                dij = sum(abs(Tij - Tji));
-                head_neighbors(1) = dij + head.B(x_ind, y_ind, theta_ind, s_ind);
-                
-                Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
-                Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
-                dij = sum(abs(Tij - Tji));
-                upper_arm_r_neighbors(1) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
-                
-                Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
-                Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
-                dij = sum(abs(Tij - Tji)); 
-                upper_arm_l_neighbors(1) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
-                
-                % neighbor in x dimension
-                if (x_ind+1 <= opt.scan_nsample.x)
-                    Lj = Li; Lj(1) = x_grid(x_ind+1);
-                    
-                    % for head part
-                    Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
-                    Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
-                    dij = sum(abs(Tij - Tji));
-                    head_neighbors(2) = dij + head.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));
-                    upper_arm_r_neighbors(2) = dij + upper_arm_r.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));                   
-                    upper_arm_l_neighbors(2) = dij + upper_arm_l.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
-                    
-                    head_neighbors_lj(2, :) = head.Bj_p{x_ind+1, y_ind, theta_ind, s_ind};
-                    upper_arm_r_neighbors_lj(2, :) = upper_arm_r.Bj_p{x_ind+1, y_ind, theta_ind, s_ind};
-                    upper_arm_l_neighbors_lj(2, :) = upper_arm_l.Bj_p{x_ind+1, y_ind, theta_ind, s_ind};
-                end
-                
-                % neighbor in y dimension
-                if (y_ind+1 <= opt.scan_nsample.y) 
-                    Lj = Li; Lj(2) = y_grid(y_ind+1);
-                    
-                    % for head part
-                    Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
-                    Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
-                    dij = sum(abs(Tij - Tji));
-                    head_neighbors(3) = dij + head.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));
-                    upper_arm_r_neighbors(3) = dij + upper_arm_r.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));                   
-                    upper_arm_l_neighbors(3) = dij + upper_arm_l.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
-                    
-                    head_neighbors_lj(3, :) = head.Bj_p{x_ind, y_ind+1, theta_ind, s_ind};
-                    upper_arm_r_neighbors_lj(3, :) = upper_arm_r.Bj_p{x_ind, y_ind+1, theta_ind, s_ind};
-                    upper_arm_l_neighbors_lj(3, :) = upper_arm_l.Bj_p{x_ind, y_ind+1, theta_ind, s_ind};
-                end
-                
-                % neighbor in theta dimension
-                if (theta_ind+1 <= opt.scan_nsample.theta)
-                    Lj = Li; Lj(3) = theta_grid(theta_ind+1);
-                    
-                    % for head part
-                    Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
-                    Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
-                    dij = sum(abs(Tij - Tji));
-                    head_neighbors(4) = dij + head.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));
-                    upper_arm_r_neighbors(4) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));                   
-                    upper_arm_l_neighbors(4) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
-                    
-                    head_neighbors_lj(4, :) = head.Bj_p{x_ind, y_ind, theta_ind+1, s_ind};
-                    upper_arm_r_neighbors_lj(4, :) = upper_arm_r.Bj_p{x_ind, y_ind, theta_ind+1, s_ind};
-                    upper_arm_l_neighbors_lj(4, :) = upper_arm_l.Bj_p{x_ind, y_ind, theta_ind+1, s_ind};
-                end
-                
-                % neighbor in s dimension
-                if (s_ind+1 <= opt.scan_nsample.s) 
-                    Lj = Li; Lj(4) = s_grid(s_ind+1);
-                    
-                    % for head part
-                    Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
-                    Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
-                    dij = sum(abs(Tij - Tji));
-                    head_neighbors(5) = dij + head.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));
-                    upper_arm_r_neighbors(5) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));                   
-                    upper_arm_l_neighbors(5) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
-                    
-                    head_neighbors_lj(5, :) = head.Bj_p{x_ind, y_ind, theta_ind, s_ind+1};
-                    upper_arm_r_neighbors_lj(5, :) = upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind+1};
-                    upper_arm_l_neighbors_lj(5, :) = upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind+1};
-                end
-                
-                % obtain the min/argmin value
-                [head.B(x_ind, y_ind, theta_ind, s_ind), head_min_ind]           = min(head_neighbors);
-                [upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind), upper_arm_r_min_ind] = min(upper_arm_r_neighbors);
-                [upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind), upper_arm_l_min_ind] = min(upper_arm_l_neighbors);
-                
-                head.Bj_p{x_ind, y_ind, theta_ind, s_ind} = head_neighbors_lj(head_min_ind, :);
-                upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind} = upper_arm_r_neighbors_lj(upper_arm_r_min_ind, :);
-                upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind} = upper_arm_l_neighbors_lj(upper_arm_l_min_ind, :);
-            end
-        end
+    L = search_grid(:, l_ind)';
+    [x_ind, y_ind, theta_ind, s_ind] = ind2sub(search_grid_dim, l_ind);
+    
+    % initialize neighbor vectors
+    head_neighbors = Inf(1, 5); % for min value
+    upper_arm_r_neighbors = Inf(1, 5);
+    upper_arm_l_neighbors = Inf(1, 5);
+
+    head_neighbors_lj = zeros(5, 4); % for argmin value, 5-neighbors
+    upper_arm_r_neighbors_lj = zeros(5, 4);
+    upper_arm_l_neighbors_lj = zeros(5, 4);
+
+    % retrieve the coordinate
+    x = x_grid(x_ind);
+    y = y_grid(y_ind);
+    s = s_grid(s_ind);
+    theta = theta_grid(theta_ind);
+
+    Li = [x, y, theta, s]; % Li
+
+    % retrieve neighboring elements
+
+    % include itself as well
+    Lj = Li;
+    Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
+    Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
+    dij = sum(abs(Tij - Tji));
+    head_neighbors(1) = dij + head.B(x_ind, y_ind, theta_ind, s_ind);
+
+    Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
+    Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
+    dij = sum(abs(Tij - Tji));
+    upper_arm_r_neighbors(1) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
+
+    Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
+    Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
+    dij = sum(abs(Tij - Tji)); 
+    upper_arm_l_neighbors(1) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
+
+    % neighbor in x dimension
+    if (x_ind+1 <= opt.scan_nsample.x)
+        Lj = Li; Lj(1) = x_grid(x_ind+1);
+
+        % for head part
+        Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
+        Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
+        dij = sum(abs(Tij - Tji));
+        head_neighbors(2) = dij + head.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));
+        upper_arm_r_neighbors(2) = dij + upper_arm_r.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));                   
+        upper_arm_l_neighbors(2) = dij + upper_arm_l.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
+
+        head_neighbors_lj(2, :) = head.Bj_p{x_ind+1, y_ind, theta_ind, s_ind};
+        upper_arm_r_neighbors_lj(2, :) = upper_arm_r.Bj_p{x_ind+1, y_ind, theta_ind, s_ind};
+        upper_arm_l_neighbors_lj(2, :) = upper_arm_l.Bj_p{x_ind+1, y_ind, theta_ind, s_ind};
     end
+
+    % neighbor in y dimension
+    if (y_ind+1 <= opt.scan_nsample.y) 
+        Lj = Li; Lj(2) = y_grid(y_ind+1);
+
+        % for head part
+        Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
+        Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
+        dij = sum(abs(Tij - Tji));
+        head_neighbors(3) = dij + head.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));
+        upper_arm_r_neighbors(3) = dij + upper_arm_r.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));                   
+        upper_arm_l_neighbors(3) = dij + upper_arm_l.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
+
+        head_neighbors_lj(3, :) = head.Bj_p{x_ind, y_ind+1, theta_ind, s_ind};
+        upper_arm_r_neighbors_lj(3, :) = upper_arm_r.Bj_p{x_ind, y_ind+1, theta_ind, s_ind};
+        upper_arm_l_neighbors_lj(3, :) = upper_arm_l.Bj_p{x_ind, y_ind+1, theta_ind, s_ind};
+    end
+
+    % neighbor in theta dimension
+    if (theta_ind+1 <= opt.scan_nsample.theta)
+        Lj = Li; Lj(3) = theta_grid(theta_ind+1);
+
+        % for head part
+        Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
+        Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
+        dij = sum(abs(Tij - Tji));
+        head_neighbors(4) = dij + head.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));
+        upper_arm_r_neighbors(4) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));                   
+        upper_arm_l_neighbors(4) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
+
+        head_neighbors_lj(4, :) = head.Bj_p{x_ind, y_ind, theta_ind+1, s_ind};
+        upper_arm_r_neighbors_lj(4, :) = upper_arm_r.Bj_p{x_ind, y_ind, theta_ind+1, s_ind};
+        upper_arm_l_neighbors_lj(4, :) = upper_arm_l.Bj_p{x_ind, y_ind, theta_ind+1, s_ind};
+    end
+
+    % neighbor in s dimension
+    if (s_ind+1 <= opt.scan_nsample.s) 
+        Lj = Li; Lj(4) = s_grid(s_ind+1);
+
+        % for head part
+        Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
+        Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
+        dij = sum(abs(Tij - Tji));
+        head_neighbors(5) = dij + head.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));
+        upper_arm_r_neighbors(5) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));                   
+        upper_arm_l_neighbors(5) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
+
+        head_neighbors_lj(5, :) = head.Bj_p{x_ind, y_ind, theta_ind, s_ind+1};
+        upper_arm_r_neighbors_lj(5, :) = upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind+1};
+        upper_arm_l_neighbors_lj(5, :) = upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind+1};
+    end
+
+    % obtain the min/argmin value
+    [head.B(x_ind, y_ind, theta_ind, s_ind), head_min_ind]           = min(head_neighbors);
+    [upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind), upper_arm_r_min_ind] = min(upper_arm_r_neighbors);
+    [upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind), upper_arm_l_min_ind] = min(upper_arm_l_neighbors);
+
+    head.Bj_p{x_ind, y_ind, theta_ind, s_ind} = head_neighbors_lj(head_min_ind, :);
+    upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind} = upper_arm_r_neighbors_lj(upper_arm_r_min_ind, :);
+    upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind} = upper_arm_l_neighbors_lj(upper_arm_l_min_ind, :);
+
 end
+
+% SIngle Pass after acceleration: 218.598945 seconds
+% Single Pass before acceleration: ~8 min
+
+%% Compute minimum distance in D for leave nodes (Backward Pass)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Backward pass through D to find the minimum value
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 fprintf('\nBackward pass through D for all leave nodes...\n');
-for x_ind = length(x_grid) : -1 : 1
-    
-    % display progress
-    if (mod(x_ind,5) == 0) 
-        fprintf('Progress: %.0f%%\n', 100*(length(x_grid)-x_ind+1)/length(x_grid)); 
+for l_ind = 1 : n_search    
+
+    if (mod(l_ind, 5000) == 0)
+        fprintf('Leave Node Backward Pass Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
     end
     
-    for y_ind = length(y_grid) : -1 : 1
-        for theta_ind = length(theta_grid) : -1 : 1
-            for s_ind = length(s_grid) : -1 : 1
+    L = back_search_grid(:, l_ind)';
+    [x_ind, y_ind, theta_ind, s_ind] = ind2sub(search_grid_dim, l_ind);
                 
-                                % initialize neighbor vectors
-                head_neighbors = Inf(1, 5); % for min value
-                upper_arm_r_neighbors = Inf(1, 5);
-                upper_arm_l_neighbors = Inf(1, 5);
-                
-                head_neighbors_lj = zeros(5, 4); % for argmin value, 5-neighbors
-                upper_arm_r_neighbors_lj = zeros(5, 4);
-                upper_arm_l_neighbors_lj = zeros(5, 4);
-                
-                % retrieve the coordinate
-                x = x_grid(x_ind);
-                y = y_grid(y_ind);
-                s = s_grid(s_ind);
-                theta = theta_grid(theta_ind);
-                
-                Li = [x, y, theta, s]; % Li
-                
-                % retrieve neighboring elements
-                
-                % include itself as well
-                Lj = Li;
-                Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
-                Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
-                dij = sum(abs(Tij - Tji));
-                head_neighbors(1) = dij + head.B(x_ind, y_ind, theta_ind, s_ind);
-                
-                Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
-                Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
-                dij = sum(abs(Tij - Tji));
-                upper_arm_r_neighbors(1) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
-                
-                Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
-                Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
-                dij = sum(abs(Tij - Tji)); 
-                upper_arm_l_neighbors(1) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
-                
-                % neighbor in x dimension
-                if (x_ind-1 >= 1)
-                    Lj = Li; Lj(1) = x_grid(x_ind-1);
-                    
-                    % for head part
-                    Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
-                    Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
-                    dij = sum(abs(Tij - Tji));
-                    head_neighbors(2) = dij + head.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));
-                    upper_arm_r_neighbors(2) = dij + upper_arm_r.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));                   
-                    upper_arm_l_neighbors(2) = dij + upper_arm_l.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
-                    
-                    head_neighbors_lj(2, :) = head.Bj_p{x_ind-1, y_ind, theta_ind, s_ind};
-                    upper_arm_r_neighbors_lj(2, :) = upper_arm_r.Bj_p{x_ind-1, y_ind, theta_ind, s_ind};
-                    upper_arm_l_neighbors_lj(2, :) = upper_arm_l.Bj_p{x_ind-1, y_ind, theta_ind, s_ind};
-                end
-                
-                % neighbor in y dimension
-                if (y_ind-1 >= 1) 
-                    Lj = Li; Lj(2) = y_grid(y_ind-1);
-                    
-                    % for head part
-                    Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
-                    Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
-                    dij = sum(abs(Tij - Tji));
-                    head_neighbors(3) = dij + head.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));
-                    upper_arm_r_neighbors(3) = dij + upper_arm_r.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));                   
-                    upper_arm_l_neighbors(3) = dij + upper_arm_l.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
-                    
-                    head_neighbors_lj(3, :) = head.Bj_p{x_ind, y_ind-1, theta_ind, s_ind};
-                    upper_arm_r_neighbors_lj(3, :) = upper_arm_r.Bj_p{x_ind, y_ind-1, theta_ind, s_ind};
-                    upper_arm_l_neighbors_lj(3, :) = upper_arm_l.Bj_p{x_ind, y_ind-1, theta_ind, s_ind};
-                end
-                
-                % neighbor in theta dimension
-                if (theta_ind-1 >= 1)
-                    Lj = Li; Lj(3) = theta_grid(theta_ind-1);
-                    
-                    % for head part
-                    Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
-                    Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
-                    dij = sum(abs(Tij - Tji));
-                    head_neighbors(4) = dij + head.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));
-                    upper_arm_r_neighbors(4) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));                   
-                    upper_arm_l_neighbors(4) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
-                    
-                    head_neighbors_lj(4, :) = head.Bj_p{x_ind, y_ind, theta_ind-1, s_ind};
-                    upper_arm_r_neighbors_lj(4, :) = upper_arm_r.Bj_p{x_ind, y_ind, theta_ind-1, s_ind};
-                    upper_arm_l_neighbors_lj(4, :) = upper_arm_l.Bj_p{x_ind, y_ind, theta_ind-1, s_ind};
-                end
-                
-                % neighbor in s dimension
-                if (s_ind-1 >= 1) 
-                    Lj = Li; Lj(4) = s_grid(s_ind-1);
-                    
-                    % for head part
-                    Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
-                    Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
-                    dij = sum(abs(Tij - Tji));
-                    head_neighbors(5) = dij + head.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));
-                    upper_arm_r_neighbors(5) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
-                    
-                    Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
-                    Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
-                    dij = sum(abs(Tij - Tji));                   
-                    upper_arm_l_neighbors(5) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
-                    
-                    head_neighbors_lj(5, :) = head.Bj_p{x_ind, y_ind, theta_ind, s_ind-1};
-                    upper_arm_r_neighbors_lj(5, :) = upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind-1};
-                    upper_arm_l_neighbors_lj(5, :) = upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind-1};
-                end
-                
-                % obtain the min/argmin value
-                [head.B(x_ind, y_ind, theta_ind, s_ind), head_min_ind]           = min(head_neighbors);
-                [upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind), upper_arm_r_min_ind] = min(upper_arm_r_neighbors);
-                [upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind), upper_arm_l_min_ind] = min(upper_arm_l_neighbors);
-                
-                head.Bj_p{x_ind, y_ind, theta_ind, s_ind} = head_neighbors_lj(head_min_ind, :);
-                upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind} = upper_arm_r_neighbors_lj(upper_arm_r_min_ind, :);
-                upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind} = upper_arm_l_neighbors_lj(upper_arm_l_min_ind, :);
-                
-            end
-        end
+    % initialize neighbor vectors
+    head_neighbors = Inf(1, 5); % for min value
+    upper_arm_r_neighbors = Inf(1, 5);
+    upper_arm_l_neighbors = Inf(1, 5);
+
+    head_neighbors_lj = zeros(5, 4); % for argmin value, 5-neighbors
+    upper_arm_r_neighbors_lj = zeros(5, 4);
+    upper_arm_l_neighbors_lj = zeros(5, 4);
+
+    % retrieve the coordinate
+    x = x_grid(x_ind);
+    y = y_grid(y_ind);
+    s = s_grid(s_ind);
+    theta = theta_grid(theta_ind);
+
+    Li = [x, y, theta, s]; % Li
+
+    % retrieve neighboring elements
+
+    % include itself as well
+    Lj = Li;
+    Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
+    Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
+    dij = sum(abs(Tij - Tji));
+    head_neighbors(1) = dij + head.B(x_ind, y_ind, theta_ind, s_ind);
+
+    Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
+    Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
+    dij = sum(abs(Tij - Tji));
+    upper_arm_r_neighbors(1) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
+
+    Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
+    Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
+    dij = sum(abs(Tij - Tji)); 
+    upper_arm_l_neighbors(1) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
+
+    % neighbor in x dimension
+    if (x_ind-1 >= 1)
+        Lj = Li; Lj(1) = x_grid(x_ind-1);
+
+        % for head part
+        Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
+        Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
+        dij = sum(abs(Tij - Tji));
+        head_neighbors(2) = dij + head.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));
+        upper_arm_r_neighbors(2) = dij + upper_arm_r.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));                   
+        upper_arm_l_neighbors(2) = dij + upper_arm_l.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
+
+        head_neighbors_lj(2, :) = head.Bj_p{x_ind-1, y_ind, theta_ind, s_ind};
+        upper_arm_r_neighbors_lj(2, :) = upper_arm_r.Bj_p{x_ind-1, y_ind, theta_ind, s_ind};
+        upper_arm_l_neighbors_lj(2, :) = upper_arm_l.Bj_p{x_ind-1, y_ind, theta_ind, s_ind};
     end
+
+    % neighbor in y dimension
+    if (y_ind-1 >= 1) 
+        Lj = Li; Lj(2) = y_grid(y_ind-1);
+
+        % for head part
+        Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
+        Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
+        dij = sum(abs(Tij - Tji));
+        head_neighbors(3) = dij + head.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));
+        upper_arm_r_neighbors(3) = dij + upper_arm_r.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));                   
+        upper_arm_l_neighbors(3) = dij + upper_arm_l.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
+
+        head_neighbors_lj(3, :) = head.Bj_p{x_ind, y_ind-1, theta_ind, s_ind};
+        upper_arm_r_neighbors_lj(3, :) = upper_arm_r.Bj_p{x_ind, y_ind-1, theta_ind, s_ind};
+        upper_arm_l_neighbors_lj(3, :) = upper_arm_l.Bj_p{x_ind, y_ind-1, theta_ind, s_ind};
+    end
+
+    % neighbor in theta dimension
+    if (theta_ind-1 >= 1)
+        Lj = Li; Lj(3) = theta_grid(theta_ind-1);
+
+        % for head part
+        Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
+        Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
+        dij = sum(abs(Tij - Tji));
+        head_neighbors(4) = dij + head.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));
+        upper_arm_r_neighbors(4) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));                   
+        upper_arm_l_neighbors(4) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
+
+        head_neighbors_lj(4, :) = head.Bj_p{x_ind, y_ind, theta_ind-1, s_ind};
+        upper_arm_r_neighbors_lj(4, :) = upper_arm_r.Bj_p{x_ind, y_ind, theta_ind-1, s_ind};
+        upper_arm_l_neighbors_lj(4, :) = upper_arm_l.Bj_p{x_ind, y_ind, theta_ind-1, s_ind};
+    end
+
+    % neighbor in s dimension
+    if (s_ind-1 >= 1) 
+        Lj = Li; Lj(4) = s_grid(s_ind-1);
+
+        % for head part
+        Tij = calc_Tij(Li, torso.part_id, head.part_id,  opt);
+        Tji = calc_Tij(Lj, head.part_id,  torso.part_id, opt);
+        dij = sum(abs(Tij - Tji));
+        head_neighbors(5) = dij + head.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_r.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_r.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));
+        upper_arm_r_neighbors(5) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
+
+        Tij = calc_Tij(Li, torso.part_id,       upper_arm_l.part_id, opt);
+        Tji = calc_Tij(Lj, upper_arm_l.part_id, torso.part_id,       opt);
+        dij = sum(abs(Tij - Tji));                   
+        upper_arm_l_neighbors(5) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
+
+        head_neighbors_lj(5, :) = head.Bj_p{x_ind, y_ind, theta_ind, s_ind-1};
+        upper_arm_r_neighbors_lj(5, :) = upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind-1};
+        upper_arm_l_neighbors_lj(5, :) = upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind-1};
+    end
+
+    % obtain the min/argmin value
+    [head.B(x_ind, y_ind, theta_ind, s_ind), head_min_ind]           = min(head_neighbors);
+    [upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind), upper_arm_r_min_ind] = min(upper_arm_r_neighbors);
+    [upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind), upper_arm_l_min_ind] = min(upper_arm_l_neighbors);
+
+    head.Bj_p{x_ind, y_ind, theta_ind, s_ind} = head_neighbors_lj(head_min_ind, :);
+    upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind} = upper_arm_r_neighbors_lj(upper_arm_r_min_ind, :);
+    upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind} = upper_arm_l_neighbors_lj(upper_arm_l_min_ind, :);
 end
 
 %% Compute f(w) for distance transformation and initialize D for root node
-
 fprintf('Initializing D using f(w) for all leave nodes...\n');
 
 torso_opt_L = [1, 1, 1, 1];
@@ -527,111 +522,3 @@ thickness = 4;
 drawidx = true;
 drawfullskeleton = 1;
 hdl = DrawStickman(total_corr, img, colors, thickness, drawidx);
-
-
-
-% %% Compute minimum distance in D for root node
-% 
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % Forward pass through D to find the minimum value
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 
-% fprintf('\nForward pass through D for the root node...\n');
-% 
-% % keep track of the lowest energy and the associated configuration
-% torso_opt_L = [1, 1, 1, 1];
-% torso_opt_E = Inf;
-% for x_ind = 1 : length(x_grid)
-%     
-%     % display progress
-%     if (mod(x_ind,5) == 0) 
-%         fprintf('Progress: %.0f%%\n', 100*x_ind/length(x_grid)); 
-%     end
-%     
-%     for y_ind = 1 : length(y_grid)
-%         for theta_ind = 1 : length(theta_grid)
-%             for s_ind = 1 : length(s_grid)
-%                 
-%                 % initialize neighbor vectors
-%                 neighbors = Inf(1, 5);
-%                 
-%                 % retrieve neighboring elements
-%                 neighbors(1) = head.B(x_ind, y_ind, theta_ind, s_ind);
-%                 
-%                 if (x_ind+1 <= opt.scan_nsample.x) % neighbor in x dimension
-%                     neighbors(2) = torso.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
-%                 end
-%                 if (y_ind+1 <= opt.scan_nsample.y) % neighbor in y dimension
-%                     neighbors(3) = torso.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
-%                 end
-%                 if (theta_ind+1 <= opt.scan_nsample.theta) % neighbor in theta dimension
-%                     neighbors(4) = torso.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
-%                 end
-%                 if (s_ind+1 <= opt.scan_nsample.s) % neighbor in s dimension
-%                     neighbors(5) = torso.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
-%                 end
-%                 
-%                 % obtain the min value
-%                 torso.B(x_ind, y_ind, theta_ind, s_ind) = min(neighbors);
-%                 
-%                 % update the min value and coordinate
-%                 if (torso.B(x_ind, y_ind, theta_ind, s_ind) < torso_opt_E)
-%                     torso_opt_L = [x_ind, y_ind, theta_ind, s_ind];
-%                     torso_opt_E = torso.B(x_ind, y_ind, theta_ind, s_ind);
-%                 end
-%             end
-%         end
-%     end
-% end
-% 
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % Backward pass through D to find the minimum value
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% 
-% % do not initialize minimum value and coordinate at this time
-% fprintf('\nBackward pass through D for all leave nodes...\n');
-% for x_ind = length(x_grid) : -1 : 1
-%     
-%     % display progress
-%     if (mod(x_ind,5) == 0) 
-%         fprintf('Progress: %.0f%%\n', 100*(length(x_grid)-x_ind+1)/length(x_grid)); 
-%     end
-%     
-%     for y_ind = length(y_grid) : -1 : 1
-%         for theta_ind = length(theta_grid) : -1 : 1
-%             for s_ind = length(s_grid) : -1 : 1
-%                 
-%                 % initialize neighbor vectors
-%                 neighbors = Inf(1, 5);
-%                 
-%                 % retrieve neighboring elements
-%                 neighbors(1) = head.B(x_ind, y_ind, theta_ind, s_ind);
-%                 
-%                 if (x_ind-1 >= 1) % neighbor in x dimension
-%                     neighbors(2) = torso.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
-%                 end
-%                 if (y_ind-1 >= 1) % neighbor in y dimension
-%                     neighbors(3) = torso.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
-%                 end
-%                 if (theta_ind-1 >= 1) % neighbor in theta dimension
-%                     neighbors(4) = torso.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
-%                 end
-%                 if (s_ind-1 >= 1) % neighbor in s dimension
-%                     neighbors(5) = torso.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
-%                 end
-%                 
-%                 % obtain the min value
-%                 torso.B(x_ind, y_ind, theta_ind, s_ind) = min(neighbors);
-%                 
-%                 % update the min value and coordinate
-%                 if (torso.B(x_ind, y_ind, theta_ind, s_ind) < torso_opt_E)
-%                     torso_opt_L = [x_ind, y_ind, theta_ind, s_ind];
-%                     torso_opt_E = torso.B(x_ind, y_ind, theta_ind, s_ind);
-%                 end
-%                 
-%             end
-%         end
-%     end
-% end
-
-

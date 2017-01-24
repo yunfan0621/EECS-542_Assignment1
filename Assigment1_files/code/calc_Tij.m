@@ -20,8 +20,7 @@ R_theta_i = [cos(theta_i), -sin(theta_i); sin(theta_i), cos(theta_i)];
 
 % compute coordinate for Tij(li)
 theta_p_i = opt.wij.theta * (theta_i - theta_ij/2);
-% s_p_i  = opt.wij.s * (log(s_i) - log(s_ij)/2);
-s_p_i  = opt.wij.s * (s_i - s_ij/2);
+s_p_i  = opt.wij.s * (log(s_i) - log(s_ij)/2);
 xy_p_i = W_ij * ([x_i, y_i]' + s_i * R_theta_i * [x_ij, y_ij]');
 xy_p_i = xy_p_i';
 
