@@ -1,7 +1,7 @@
 function Tij = calc_Tij(i, j, x_grid, y_grid, theta_grid, s_grid, opt)
 
 % compute theta_i' and s_i' for computing Tij_xy
-Tij_theta = opt.wij.theta * (theta_grid - opt.model.theta_ij(i, j));
+Tij_theta = opt.wij.theta * (theta_grid - opt.model.theta_ij(i, j)/2);
 Tij_s     = opt.wij.s * (log(s_grid) - log(opt.model.s_ij(i, j)));
 
 % compute theta' and s' for Tij

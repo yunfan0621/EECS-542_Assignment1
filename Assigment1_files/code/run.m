@@ -313,11 +313,11 @@ end
 % Forward pass through D to find the minimum value
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-fprintf('\nForward pass through D for all leave nodes...\n');
+fprintf('\nBackward pass through D for all leave nodes...\n');
 for l_ind = n_search : -1 : 1    
 
     if (mod(l_ind, 5000) == 0)
-        fprintf('Leave Node Forward Pass Progress: %.0f%%\n', 100*(n_search-l_ind+5000)/size(search_grid, 2)); 
+        fprintf('Leave Node Backward Pass Progress: %.0f%%\n', 100*(n_search-l_ind+5000)/size(search_grid, 2)); 
     end
 
     [x_ind, y_ind, theta_ind, s_ind] = ind2sub(search_grid_dim, l_ind);
