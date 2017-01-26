@@ -16,10 +16,10 @@ opt.k.theta = 0;
 opt.k.s = 0;
 
 % weights for computing dij
-opt.wij.x = 1;
-opt.wij.y = 1;
+opt.wij.x = 10;
+opt.wij.y = 10;
 opt.wij.theta = 0.5;
-opt.wij.s = 10;
+opt.wij.s = 5;
 
 % parameter of the ideal model
 opt.model.len = [160, 95, 95, 65, 65, 60]; % length of model part measured in pixels
@@ -33,13 +33,13 @@ opt.model.s_ij = NaN(length(opt.model.len));
 % NOTE the direction of x-y axis
 
 % torso (li) -> upper_arm_r (lj)
-opt.model.x_ij(torso.part_id, upper_arm_r.part_id) = 0;
+opt.model.x_ij(torso.part_id, upper_arm_r.part_id) = 60;
 opt.model.y_ij(torso.part_id, upper_arm_r.part_id) = -60;
 opt.model.theta_ij(torso.part_id, upper_arm_r.part_id) = 0;
 opt.model.s_ij(torso.part_id, upper_arm_r.part_id) = 1;
 
 % torso (li) -> upper_arm_l (lj)
-opt.model.x_ij(torso.part_id, upper_arm_l.part_id) = 0;
+opt.model.x_ij(torso.part_id, upper_arm_l.part_id) = -60;
 opt.model.y_ij(torso.part_id, upper_arm_l.part_id) = -60;
 opt.model.theta_ij(torso.part_id, upper_arm_l.part_id) = 0;
 opt.model.s_ij(torso.part_id, upper_arm_l.part_id) = 1;

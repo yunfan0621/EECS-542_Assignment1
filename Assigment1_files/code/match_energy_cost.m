@@ -29,7 +29,8 @@ dat_y = mean([dat_pt(2) dat_pt(4)]);
 dat_theta = atan((dat_pt(2)-dat_pt(4))/(dat_pt(1)-dat_pt(3)));
 
 % special treatment of head and torso
-if part==1 || part ==6 % ???
+% compensate for ideal model orientation
+if part==1 || part ==6
     if dat_theta < 0
         dat_theta = dat_theta+pi/2;
     else
