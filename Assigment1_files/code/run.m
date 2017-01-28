@@ -11,7 +11,7 @@ startup;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % specify and read in the image
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-img_seq = 5;  % the sequence (index) of the image in the folder
+img_seq = 5;   % the sequence (index) of the image in the folder
 img_id  = 829; % the id of the image filename
 img_filename  = sprintf('%06d.jpg', img_id);
 img_directory = fullfile('..', 'buffy_s5e2_original', img_filename);
@@ -59,7 +59,7 @@ set_opt;
 [m, n, ~] = size(img);
 x_grid = linspace(1, n, opt.scan_nsample.x);
 y_grid = linspace(1, m, opt.scan_nsample.y);
-theta_grid = linspace(-pi, pi, opt.scan_nsample.theta); % normalization???
+theta_grid = linspace(opt.scan_nsample.theta_min, opt.scan_nsample.theta_max, opt.scan_nsample.theta); % normalization???
 s_grid = linspace(opt.scan_nsample.s_min, opt.scan_nsample.s_max, opt.scan_nsample.s);
 
 % Initialize entire searching space

@@ -1,9 +1,10 @@
 %% Create parameter struct opt 
 % specify L grid
-opt.scan_nsample = [];
 opt.scan_nsample.x = 50;
 opt.scan_nsample.y = 50;
 opt.scan_nsample.theta = 20;
+opt.scan_nsample.theta_max = 2*pi;
+opt.scan_nsample.theta_min = 0;
 opt.scan_nsample.s = 10;
 opt.scan_nsample.s_min = 0.2;
 opt.scan_nsample.s_max = 2;
