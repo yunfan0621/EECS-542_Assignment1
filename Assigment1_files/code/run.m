@@ -137,6 +137,13 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Forward pass through D to find the minimum value
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+head_dij = zeros(5, n_search);
+upper_arm_l_dij = zeros(5, n_search);
+upper_arm_r_dij = zeros(5, n_search);
+
+head_fw = zeros(5, n_search);
+upper_arm_l_fw = zeros(5, n_search);
+upper_arm_r_fw = zeros(5, n_search);
 
 fprintf('\nForward pass through D for all leave nodes...\n');
 for l_ind = 1 : n_search % seach for all possibility of li
@@ -165,16 +172,22 @@ for l_ind = 1 : n_search % seach for all possibility of li
     Tij = T_head_torso(:, Li);
     Tji = T_torso_head(:, Lj);
     dij = sum(abs(Tij - Tji));
-    head_neighbors(1) = dij + head.B(x_ind, y_ind, theta_ind, s_ind);
+    head_dij(1,l_ind) = dij;
+    head_fw(1,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind);
+    head_neighbors(1)  = dij + head.B(x_ind, y_ind, theta_ind, s_ind);
 
     Tij = T_upper_arm_l_torso(:, Li);
     Tji = T_torso_upper_arm_l(:, Lj);
     dij = sum(abs(Tij - Tji));
+    upper_arm_l_dij(1,l_ind) = dij;
+    upper_arm_l_fw(1,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind);
     upper_arm_l_neighbors(1) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
 
     Tij = T_upper_arm_r_torso(:, Li);
     Tji = T_torso_upper_arm_r(:, Lj);
     dij = sum(abs(Tij - Tji));
+    upper_arm_r_dij(1,l_ind) = dij;
+    upper_arm_r_fw(1,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind);
     upper_arm_r_neighbors(1) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
     
     % take down the lj that gives this distance
@@ -194,16 +207,22 @@ for l_ind = 1 : n_search % seach for all possibility of li
         Tij = T_head_torso(:, Li);
         Tji = T_torso_head(:, Lj);
         dij = sum(abs(Tij - Tji));
+        head_dij(2,l_ind) = dij;
+        head_fw(2,l_ind)  = head.B(x_ind+1, y_ind, theta_ind, s_ind);
         head_neighbors(2) = dij + head.B(x_ind+1, y_ind, theta_ind, s_ind);
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
+        upper_arm_r_dij(2,l_ind) = dij;
+        upper_arm_r_fw(2,l_ind)  = head.B(x_ind+1, y_ind, theta_ind, s_ind);
         upper_arm_r_neighbors(2) = dij + upper_arm_r.B(x_ind+1, y_ind, theta_ind, s_ind);
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
+        upper_arm_l_dij(2,l_ind) = dij;
+        upper_arm_l_fw(2,l_ind)  = head.B(x_ind+1, y_ind, theta_ind, s_ind);
         upper_arm_l_neighbors(2) = dij + upper_arm_l.B(x_ind+1, y_ind, theta_ind, s_ind);
         
         % take down the lj that gives this distance
@@ -224,16 +243,22 @@ for l_ind = 1 : n_search % seach for all possibility of li
         Tij = T_head_torso(:, Li);
         Tji = T_torso_head(:, Lj);
         dij = sum(abs(Tij - Tji));
+        head_dij(3,l_ind) = dij;
+        head_fw(3,l_ind)  = head.B(x_ind, y_ind+1, theta_ind, s_ind);        
         head_neighbors(3) = dij + head.B(x_ind, y_ind+1, theta_ind, s_ind);
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
+        upper_arm_r_dij(3,l_ind) = dij;
+        upper_arm_r_fw(3,l_ind)  = head.B(x_ind, y_ind+1, theta_ind, s_ind);
         upper_arm_r_neighbors(3) = dij + upper_arm_r.B(x_ind, y_ind+1, theta_ind, s_ind);
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
+        upper_arm_l_dij(3,l_ind) = dij;
+        upper_arm_l_fw(3,l_ind)  = head.B(x_ind, y_ind+1, theta_ind, s_ind);
         upper_arm_l_neighbors(3) = dij + upper_arm_l.B(x_ind, y_ind+1, theta_ind, s_ind);
         
         % take down the lj that gives this distance
@@ -254,16 +279,22 @@ for l_ind = 1 : n_search % seach for all possibility of li
         Tij = T_head_torso(:, Li);
         Tji = T_torso_head(:, Lj);
         dij = sum(abs(Tij - Tji));
+        head_dij(4,l_ind) = dij;
+        head_fw(4,l_ind)  = head.B(x_ind, y_ind, theta_ind+1, s_ind);        
         head_neighbors(4) = dij + head.B(x_ind, y_ind, theta_ind+1, s_ind);
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
+        upper_arm_r_dij(4,l_ind) = dij;
+        upper_arm_r_fw(4,l_ind)  = head.B(x_ind, y_ind, theta_ind+1, s_ind);
         upper_arm_r_neighbors(4) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind+1, s_ind);
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
+        upper_arm_l_dij(4,l_ind) = dij;
+        upper_arm_l_fw(4,l_ind)  = head.B(x_ind, y_ind, theta_ind+1, s_ind);
         upper_arm_l_neighbors(4) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind+1, s_ind);
         
         % take down the lj that gives this distance
@@ -284,16 +315,22 @@ for l_ind = 1 : n_search % seach for all possibility of li
         Tij = T_head_torso(:, Li);
         Tji = T_torso_head(:, Lj);
         dij = sum(abs(Tij - Tji));
+        head_dij(5,l_ind) = dij;
+        head_fw(5,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind+1);       
         head_neighbors(5) = dij + head.B(x_ind, y_ind, theta_ind, s_ind+1);
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
+        upper_arm_r_dij(5,l_ind) = dij;
+        upper_arm_r_fw(5,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind+1);
         upper_arm_r_neighbors(5) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind+1);
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
+        upper_arm_l_dij(5,l_ind) = dij;
+        upper_arm_l_fw(5,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind+1);
         upper_arm_l_neighbors(5) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind+1);
         
         % take down the lj that gives this distance
@@ -310,6 +347,7 @@ for l_ind = 1 : n_search % seach for all possibility of li
     head.Bj_p{x_ind, y_ind, theta_ind, s_ind} = head_neighbors_lj(head_min_ind, :);
     upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind} = upper_arm_r_neighbors_lj(upper_arm_r_min_ind, :);
     upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind} = upper_arm_l_neighbors_lj(upper_arm_l_min_ind, :);
+    
 
 end
 

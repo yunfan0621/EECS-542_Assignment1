@@ -17,10 +17,11 @@ opt.k.theta = 0;
 opt.k.s = 0;
 
 % weights for computing dij
-opt.wij.x = 10;
-opt.wij.y = 10;
-opt.wij.theta = 0.5;
-opt.wij.s = 5;
+opt.wij.weight = 1000; % weight for deformation term
+opt.wij.x = opt.wij.weight * 0.5;
+opt.wij.y = opt.wij.weight * 0.5;
+opt.wij.theta = opt.wij.weight * 10;
+opt.wij.s = opt.wij.weight * 100;
 
 % parameter of the ideal model
 opt.model.len = [160, 95, 95, 65, 65, 60]; % length of model part measured in pixels
