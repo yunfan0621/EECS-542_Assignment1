@@ -56,6 +56,7 @@ upper_arm_l = struct('name',        'upper_arm_l',...
 % Create parameter struct opt
 set_opt;
 
+% Specify the search grid in each dimension
 [m, n, ~] = size(img);
 x_grid = linspace(1, n, opt.scan_nsample.x);
 y_grid = linspace(1, m, opt.scan_nsample.y);
@@ -64,8 +65,7 @@ s_grid = linspace(opt.scan_nsample.s_min, opt.scan_nsample.s_max, opt.scan_nsamp
 
 % Initialize entire searching space
 search_grid_dim = [opt.scan_nsample.x, opt.scan_nsample.y, opt.scan_nsample.theta, opt.scan_nsample.s];
-search_grid = combvec(combvec(combvec(x_grid, y_grid), theta_grid), s_grid);
-back_search_grid = combvec(combvec(combvec(x_grid(end:-1:1), y_grid(end:-1:1)), theta_grid(end:-1:1)), s_grid(end:-1:1));
+search_grid = combvec(x_grid, y_grid, theta_grid, s_grid);
 n_search = size(search_grid, 2);
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -88,10 +88,11 @@ upper_arm_l.Bj_p = cell(size(torso.B));
 % Pre-compute Tij and Tji for acceleration
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 T_head_torso = calc_Tij(head.part_id, torso.part_id, x_grid, y_grid, theta_grid, s_grid, opt);
-T_torso_head = calc_Tij(torso.part_id, head.part_id, x_grid, y_grid, theta_grid, s_grid, opt);
 T_upper_arm_l_torso = calc_Tij(upper_arm_l.part_id, torso.part_id, x_grid, y_grid, theta_grid, s_grid, opt);
-T_torso_upper_arm_l = calc_Tij(torso.part_id, upper_arm_l.part_id, x_grid, y_grid, theta_grid, s_grid, opt);
 T_upper_arm_r_torso = calc_Tij(upper_arm_r.part_id, torso.part_id, x_grid, y_grid, theta_grid, s_grid, opt);
+
+T_torso_head = calc_Tij(torso.part_id, head.part_id, x_grid, y_grid, theta_grid, s_grid, opt);
+T_torso_upper_arm_l = calc_Tij(torso.part_id, upper_arm_l.part_id, x_grid, y_grid, theta_grid, s_grid, opt);
 T_torso_upper_arm_r = calc_Tij(torso.part_id, upper_arm_r.part_id, x_grid, y_grid, theta_grid, s_grid, opt);
 
 %% Compute f(w) for distance transformation and initialize D for leave nodes
@@ -106,21 +107,30 @@ for l_ind = 1 : n_search
         fprintf('f(w) Initialization Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
     end
     
-    L = search_grid(:, l_ind)';
+    Lj = search_grid(:, l_ind)';
     [x_ind, y_ind, theta_ind, s_ind] = ind2sub(search_grid_dim, l_ind);
 
-    head.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(L, head.part_id, dat_pt(:,head.part_id));
-    upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(L, upper_arm_l.part_id, dat_pt(:,upper_arm_l.part_id)); 
-    upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(L, upper_arm_r.part_id, dat_pt(:,upper_arm_r.part_id));
+    head.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(Lj, head.part_id, dat_pt(:,head.part_id));
+    upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(Lj, upper_arm_l.part_id, dat_pt(:,upper_arm_l.part_id)); 
+    upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(Lj, upper_arm_r.part_id, dat_pt(:,upper_arm_r.part_id));
 
-    head.Bj_p{x_ind, y_ind, theta_ind, s_ind} = L;
-    upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind} = L;
-    upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind} = L;
+    head.Bj_p{x_ind, y_ind, theta_ind, s_ind} = Lj;
+    upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind} = Lj;
+    upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind} = Lj;
 end
 
-% After acceleration + perfor: 17.416040 seconds (with the cost of losing readability)
+% After acceleration + parfor: 17.416040 seconds (with the cost of losing readability)
 % After acceleration:          27.939928 seconds
 % Before acceleration:         51.130546 seconds
+
+%% Testcase for f(w) initialization
+% B = upper_arm_l.B;
+% [val, ind] = min(B(:));
+% [x_ind, y_ind, theta_ind, s_ind] = ind2sub(search_grid_dim, ind);
+% fprintf('Optimal x: %d\n', x_grid(x_ind));
+% fprintf('Optimal y: %d\n', y_grid(y_ind));
+% fprintf('Optimal theta: %d\n', theta_grid(theta_ind));
+% fprintf('Optimal s: %d\n', s_grid(s_ind));
 
 %% Compute minimum distance in D for leave nodes (Forward Pass)
 
@@ -129,7 +139,7 @@ end
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 fprintf('\nForward pass through D for all leave nodes...\n');
-for l_ind = 1 : n_search    
+for l_ind = 1 : n_search % seach for all possibility of li
 
     if (mod(l_ind, 5000) == 0)
         fprintf('Leave Node Forward Pass Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
@@ -309,9 +319,9 @@ end
 
 %% Compute minimum distance in D for leave nodes (Backward Pass)
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Forward pass through D to find the minimum value
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Backward pass through D to find the minimum value
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 fprintf('\nBackward pass through D for all leave nodes...\n');
 for l_ind = n_search : -1 : 1    
@@ -488,43 +498,33 @@ for l_ind = n_search : -1 : 1
 
 end
 
-%% Compute f(w) for distance transformation and initialize D for root node
-fprintf('Initializing D using f(w) for all leave nodes...\n');
+%% Solve for optimal configuration for torso
+fprintf('Solving for optimal torso configuration...\n');
 
 torso_opt_L = [1, 1, 1, 1];
 torso_opt_E = Inf;
-for x_ind = 1 : length(x_grid)
+for l_ind = 1 : n_search
+                
+    if (mod(l_ind, 10000) == 0)
+        fprintf('Solving for optimal configuration of torso, progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
+    end
     
-    % display progress
-    fprintf('Progress: %.0f%%\n', 100*x_ind/length(x_grid)); 
+    [x_ind, y_ind, theta_ind, s_ind] = ind2sub(search_grid_dim, l_ind);
+    L = search_grid(:, l_ind)';
     
-    for y_ind = 1 : length(y_grid)
-        for theta_ind = 1 : length(theta_grid)
-            for s_ind = 1 : length(s_grid)
-                
-                % retrieve the coordinate and energy of leave nodes
-                x = x_grid(x_ind);
-                y = y_grid(y_ind);
-                s = s_grid(s_ind);
-                theta = theta_grid(theta_ind);
-                
-                L = [x, y, theta, s];
-                head_energy = head.B(x_ind, y_ind, theta_ind, s_ind);
-                upper_arm_r_energy = upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
-                upper_arm_l_energy = upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
-                
-                % compute the total energy
-                torso.B(x_ind, y_ind, theta_ind, s_ind) = ...
-                    match_energy_cost(L, torso.part_id, dat_pt(:,torso.part_id)) + ...
-                    head_energy + upper_arm_r_energy + upper_arm_r_energy; 
-                
-                % update the minimum value
-                if (torso.B(x_ind, y_ind, theta_ind, s_ind) < torso_opt_E)
-                    torso_opt_E = torso.B(x_ind, y_ind, theta_ind, s_ind);
-                    torso_opt_L = [x_ind, y_ind, theta_ind, s_ind];
-                end
-            end
-        end
+    head_energy = head.B(x_ind, y_ind, theta_ind, s_ind);
+    upper_arm_r_energy = upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
+    upper_arm_l_energy = upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
+
+    % compute the total energy
+    torso.B(x_ind, y_ind, theta_ind, s_ind) = ...
+        match_energy_cost(L, torso.part_id, dat_pt(:,torso.part_id)) + ...
+        head_energy + upper_arm_r_energy + upper_arm_l_energy; 
+
+    % update the minimum value
+    if (torso.B(x_ind, y_ind, theta_ind, s_ind) < torso_opt_E)
+        torso_opt_E = torso.B(x_ind, y_ind, theta_ind, s_ind);
+        torso_opt_L = [x_ind, y_ind, theta_ind, s_ind];
     end
 end
 

@@ -5,7 +5,6 @@ function cost= match_energy_cost(L, part, dat_pt)
 
 if part>1 && part <6
     % compute the error between L and each arm part
-    % ???
     val1 = calc_val(dat_pt,L,2);
     val2 = calc_val(dat_pt,L,3);
     % val3 = calc_val(dat_pt,L,4);
@@ -29,7 +28,7 @@ dat_y = mean([dat_pt(2) dat_pt(4)]);
 dat_theta = atan((dat_pt(2)-dat_pt(4))/(dat_pt(1)-dat_pt(3)));
 
 % special treatment of head and torso
-% compensate for ideal model orientation
+% compensate for ideal model orientation (deviation from ideal model)
 if part==1 || part ==6
     if dat_theta < 0
         dat_theta = dat_theta+pi/2;
