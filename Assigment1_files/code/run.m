@@ -1,4 +1,4 @@
-clc; close all; clear all;
+clc; clear all;
 
 %% Initialization
 
@@ -110,10 +110,11 @@ for l_ind = 1 : n_search
     Lj = search_grid(:, l_ind)';
     [x_ind, y_ind, theta_ind, s_ind] = ind2sub(search_grid_dim, l_ind);
 
-    head.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(Lj, head.part_id, dat_pt(:,head.part_id));
-    upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(Lj, upper_arm_l.part_id, dat_pt(:,upper_arm_l.part_id)); 
-    upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(Lj, upper_arm_r.part_id, dat_pt(:,upper_arm_r.part_id));
-
+    torso.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(Lj, torso.part_id, dat_pt(:, torso.part_id));
+    head.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(Lj, head.part_id, dat_pt(:, head.part_id));
+    upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(Lj, upper_arm_l.part_id, dat_pt(:, upper_arm_l.part_id)); 
+    upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind) = match_energy_cost(Lj, upper_arm_r.part_id, dat_pt(:, upper_arm_r.part_id));
+    
     head.Bj_p{x_ind, y_ind, theta_ind, s_ind} = Lj;
     upper_arm_l.Bj_p{x_ind, y_ind, theta_ind, s_ind} = Lj;
     upper_arm_r.Bj_p{x_ind, y_ind, theta_ind, s_ind} = Lj;
@@ -124,7 +125,7 @@ end
 % Before acceleration:         51.130546 seconds
 
 %% Testcase for f(w) initialization
-% B = upper_arm_l.B;
+% B = torso.B;
 % [val, ind] = min(B(:));
 % [x_ind, y_ind, theta_ind, s_ind] = ind2sub(search_grid_dim, ind);
 % fprintf('Optimal x: %d\n', x_grid(x_ind));
@@ -174,21 +175,21 @@ for l_ind = 1 : n_search % seach for all possibility of li
     dij = sum(abs(Tij - Tji));
     head_dij(1,l_ind) = dij;
     head_fw(1,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind);
-    head_neighbors(1)  = dij + head.B(x_ind, y_ind, theta_ind, s_ind);
+    head_neighbors(1)  = dij + opt.fw.weight * head.B(x_ind, y_ind, theta_ind, s_ind);
 
     Tij = T_upper_arm_l_torso(:, Li);
     Tji = T_torso_upper_arm_l(:, Lj);
     dij = sum(abs(Tij - Tji));
     upper_arm_l_dij(1,l_ind) = dij;
     upper_arm_l_fw(1,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind);
-    upper_arm_l_neighbors(1) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
+    upper_arm_l_neighbors(1) = dij + opt.fw.weight * upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
 
     Tij = T_upper_arm_r_torso(:, Li);
     Tji = T_torso_upper_arm_r(:, Lj);
     dij = sum(abs(Tij - Tji));
     upper_arm_r_dij(1,l_ind) = dij;
     upper_arm_r_fw(1,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind);
-    upper_arm_r_neighbors(1) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
+    upper_arm_r_neighbors(1) = dij + opt.fw.weight * upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
     
     % take down the lj that gives this distance
     head_neighbors_lj(1, :) = head.Bj_p{x_ind, y_ind, theta_ind, s_ind};
@@ -199,8 +200,7 @@ for l_ind = 1 : n_search % seach for all possibility of li
     % neighbor in x-direction
     %%%%%%%%%%%%%%%%%%%%%%%%%%%
     if (x_ind+1 <= opt.scan_nsample.x)
-        
-        Li = l_ind;
+
         Lj = sub2ind(search_grid_dim, x_ind+1, y_ind, theta_ind, s_ind);
         
         % compute corresponding distance
@@ -209,21 +209,21 @@ for l_ind = 1 : n_search % seach for all possibility of li
         dij = sum(abs(Tij - Tji));
         head_dij(2,l_ind) = dij;
         head_fw(2,l_ind)  = head.B(x_ind+1, y_ind, theta_ind, s_ind);
-        head_neighbors(2) = dij + head.B(x_ind+1, y_ind, theta_ind, s_ind);
+        head_neighbors(2) = dij + opt.fw.weight * head.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
         upper_arm_r_dij(2,l_ind) = dij;
         upper_arm_r_fw(2,l_ind)  = head.B(x_ind+1, y_ind, theta_ind, s_ind);
-        upper_arm_r_neighbors(2) = dij + upper_arm_r.B(x_ind+1, y_ind, theta_ind, s_ind);
+        upper_arm_r_neighbors(2) = dij + opt.fw.weight * upper_arm_r.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
         upper_arm_l_dij(2,l_ind) = dij;
         upper_arm_l_fw(2,l_ind)  = head.B(x_ind+1, y_ind, theta_ind, s_ind);
-        upper_arm_l_neighbors(2) = dij + upper_arm_l.B(x_ind+1, y_ind, theta_ind, s_ind);
+        upper_arm_l_neighbors(2) = dij + opt.fw.weight * upper_arm_l.B(x_ind+1, y_ind, theta_ind, s_ind) + opt.k.x;
         
         % take down the lj that gives this distance
         head_neighbors_lj(2, :) = head.Bj_p{x_ind+1, y_ind, theta_ind, s_ind};
@@ -235,8 +235,7 @@ for l_ind = 1 : n_search % seach for all possibility of li
     % neighbor in y-direction
     %%%%%%%%%%%%%%%%%%%%%%%%%%%
     if (y_ind+1 <= opt.scan_nsample.y) 
-        
-        Li = l_ind;
+
         Lj = sub2ind(search_grid_dim, x_ind, y_ind+1, theta_ind, s_ind);
         
         % compute corresponding distance
@@ -245,21 +244,21 @@ for l_ind = 1 : n_search % seach for all possibility of li
         dij = sum(abs(Tij - Tji));
         head_dij(3,l_ind) = dij;
         head_fw(3,l_ind)  = head.B(x_ind, y_ind+1, theta_ind, s_ind);        
-        head_neighbors(3) = dij + head.B(x_ind, y_ind+1, theta_ind, s_ind);
+        head_neighbors(3) = dij + opt.fw.weight * head.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
         upper_arm_r_dij(3,l_ind) = dij;
         upper_arm_r_fw(3,l_ind)  = head.B(x_ind, y_ind+1, theta_ind, s_ind);
-        upper_arm_r_neighbors(3) = dij + upper_arm_r.B(x_ind, y_ind+1, theta_ind, s_ind);
+        upper_arm_r_neighbors(3) = dij + opt.fw.weight * upper_arm_r.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
         upper_arm_l_dij(3,l_ind) = dij;
         upper_arm_l_fw(3,l_ind)  = head.B(x_ind, y_ind+1, theta_ind, s_ind);
-        upper_arm_l_neighbors(3) = dij + upper_arm_l.B(x_ind, y_ind+1, theta_ind, s_ind);
+        upper_arm_l_neighbors(3) = dij + opt.fw.weight * upper_arm_l.B(x_ind, y_ind+1, theta_ind, s_ind) + opt.k.y;
         
         % take down the lj that gives this distance
         head_neighbors_lj(3, :) = head.Bj_p{x_ind, y_ind+1, theta_ind, s_ind};
@@ -272,7 +271,6 @@ for l_ind = 1 : n_search % seach for all possibility of li
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     if (theta_ind+1 <= opt.scan_nsample.theta)
         
-        Li = l_ind;
         Lj = sub2ind(search_grid_dim, x_ind, y_ind, theta_ind+1, s_ind);
         
         % compute corresponding distance
@@ -281,21 +279,21 @@ for l_ind = 1 : n_search % seach for all possibility of li
         dij = sum(abs(Tij - Tji));
         head_dij(4,l_ind) = dij;
         head_fw(4,l_ind)  = head.B(x_ind, y_ind, theta_ind+1, s_ind);        
-        head_neighbors(4) = dij + head.B(x_ind, y_ind, theta_ind+1, s_ind);
+        head_neighbors(4) = dij + opt.fw.weight * head.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
         upper_arm_r_dij(4,l_ind) = dij;
         upper_arm_r_fw(4,l_ind)  = head.B(x_ind, y_ind, theta_ind+1, s_ind);
-        upper_arm_r_neighbors(4) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind+1, s_ind);
+        upper_arm_r_neighbors(4) = dij + opt.fw.weight * upper_arm_r.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
         upper_arm_l_dij(4,l_ind) = dij;
         upper_arm_l_fw(4,l_ind)  = head.B(x_ind, y_ind, theta_ind+1, s_ind);
-        upper_arm_l_neighbors(4) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind+1, s_ind);
+        upper_arm_l_neighbors(4) = dij + opt.fw.weight * upper_arm_l.B(x_ind, y_ind, theta_ind+1, s_ind) + opt.k.theta;
         
         % take down the lj that gives this distance
         head_neighbors_lj(4, :) = head.Bj_p{x_ind, y_ind, theta_ind+1, s_ind};
@@ -308,7 +306,6 @@ for l_ind = 1 : n_search % seach for all possibility of li
     %%%%%%%%%%%%%%%%%%%%%%%%%%%
     if (s_ind+1 <= opt.scan_nsample.s) 
         
-        Li = l_ind;
         Lj = sub2ind(search_grid_dim, x_ind, y_ind, theta_ind, s_ind+1);
         
         % compute corresponding distance
@@ -317,21 +314,21 @@ for l_ind = 1 : n_search % seach for all possibility of li
         dij = sum(abs(Tij - Tji));
         head_dij(5,l_ind) = dij;
         head_fw(5,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind+1);       
-        head_neighbors(5) = dij + head.B(x_ind, y_ind, theta_ind, s_ind+1);
+        head_neighbors(5) = dij + opt.fw.weight * head.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
         upper_arm_r_dij(5,l_ind) = dij;
         upper_arm_r_fw(5,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind+1);
-        upper_arm_r_neighbors(5) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind+1);
+        upper_arm_r_neighbors(5) = dij + opt.fw.weight * upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
         upper_arm_l_dij(5,l_ind) = dij;
         upper_arm_l_fw(5,l_ind)  = head.B(x_ind, y_ind, theta_ind, s_ind+1);
-        upper_arm_l_neighbors(5) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind+1);
+        upper_arm_l_neighbors(5) = dij + opt.fw.weight * upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind+1) + opt.k.s;
         
         % take down the lj that gives this distance
         head_neighbors_lj(5, :) = head.Bj_p{x_ind, y_ind, theta_ind, s_ind+1};
@@ -417,17 +414,17 @@ for l_ind = n_search : -1 : 1
         Tij = T_head_torso(:, Li);
         Tji = T_torso_head(:, Lj);
         dij = sum(abs(Tij - Tji));
-        head_neighbors(2) = dij + head.B(x_ind-1, y_ind, theta_ind, s_ind);
+        head_neighbors(2) = dij + head.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
-        upper_arm_r_neighbors(2) = dij + upper_arm_r.B(x_ind-1, y_ind, theta_ind, s_ind);
+        upper_arm_r_neighbors(2) = dij + upper_arm_r.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
-        upper_arm_l_neighbors(2) = dij + upper_arm_l.B(x_ind-1, y_ind, theta_ind, s_ind);
+        upper_arm_l_neighbors(2) = dij + upper_arm_l.B(x_ind-1, y_ind, theta_ind, s_ind) + opt.k.x;
         
         % take down the lj that gives this distance
         head_neighbors_lj(2, :) = head.Bj_p{x_ind-1, y_ind, theta_ind, s_ind};
@@ -447,17 +444,17 @@ for l_ind = n_search : -1 : 1
         Tij = T_head_torso(:, Li);
         Tji = T_torso_head(:, Lj);
         dij = sum(abs(Tij - Tji));
-        head_neighbors(3) = dij + head.B(x_ind, y_ind-1, theta_ind, s_ind);
+        head_neighbors(3) = dij + head.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
-        upper_arm_r_neighbors(3) = dij + upper_arm_r.B(x_ind, y_ind-1, theta_ind, s_ind);
+        upper_arm_r_neighbors(3) = dij + upper_arm_r.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
-        upper_arm_l_neighbors(3) = dij + upper_arm_l.B(x_ind, y_ind-1, theta_ind, s_ind);
+        upper_arm_l_neighbors(3) = dij + upper_arm_l.B(x_ind, y_ind-1, theta_ind, s_ind) + opt.k.y;
         
         % take down the lj that gives this distance
         head_neighbors_lj(3, :) = head.Bj_p{x_ind, y_ind-1, theta_ind, s_ind};
@@ -477,17 +474,17 @@ for l_ind = n_search : -1 : 1
         Tij = T_head_torso(:, Li);
         Tji = T_torso_head(:, Lj);
         dij = sum(abs(Tij - Tji));
-        head_neighbors(4) = dij + head.B(x_ind, y_ind, theta_ind-1, s_ind);
+        head_neighbors(4) = dij + head.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
-        upper_arm_r_neighbors(4) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind-1, s_ind);
+        upper_arm_r_neighbors(4) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
-        upper_arm_l_neighbors(4) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind-1, s_ind);
+        upper_arm_l_neighbors(4) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind-1, s_ind) + opt.k.theta;
         
         % take down the lj that gives this distance
         head_neighbors_lj(4, :) = head.Bj_p{x_ind, y_ind, theta_ind-1, s_ind};
@@ -507,17 +504,17 @@ for l_ind = n_search : -1 : 1
         Tij = T_head_torso(:, Li);
         Tji = T_torso_head(:, Lj);
         dij = sum(abs(Tij - Tji));
-        head_neighbors(5) = dij + head.B(x_ind, y_ind, theta_ind, s_ind-1);
+        head_neighbors(5) = dij + head.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
         
         Tij = T_upper_arm_r_torso(:, Li);
         Tji = T_torso_upper_arm_r(:, Lj);
         dij = sum(abs(Tij - Tji));
-        upper_arm_r_neighbors(5) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind-1);
+        upper_arm_r_neighbors(5) = dij + upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
 
         Tij = T_upper_arm_l_torso(:, Li);
         Tji = T_torso_upper_arm_l(:, Lj);
         dij = sum(abs(Tij - Tji));
-        upper_arm_l_neighbors(5) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind-1);
+        upper_arm_l_neighbors(5) = dij + upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind-1) + opt.k.s;
         
         % take down the lj that gives this distance
         head_neighbors_lj(5, :) = head.Bj_p{x_ind, y_ind, theta_ind, s_ind-1};
@@ -536,33 +533,40 @@ for l_ind = n_search : -1 : 1
 
 end
 
+%% Testcase for f(w) initialization
+B = head.B;
+[val, ind] = min(B(:));
+[x_ind, y_ind, theta_ind, s_ind] = ind2sub(search_grid_dim, ind);
+fprintf('Optimal x: %d\n', x_grid(x_ind));
+fprintf('Optimal y: %d\n', y_grid(y_ind));
+fprintf('Optimal theta: %d\n', theta_grid(theta_ind));
+fprintf('Optimal s: %d\n', s_grid(s_ind));
+
 %% Solve for optimal configuration for torso
 fprintf('Solving for optimal torso configuration...\n');
-
-torso_opt_L = [1, 1, 1, 1];
 torso_opt_E = Inf;
 for l_ind = 1 : n_search
                 
-    if (mod(l_ind, 10000) == 0)
+    if (mod(l_ind, 50000) == 0)
         fprintf('Solving for optimal configuration of torso, progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
     end
     
     [x_ind, y_ind, theta_ind, s_ind] = ind2sub(search_grid_dim, l_ind);
     L = search_grid(:, l_ind)';
     
-    head_energy = head.B(x_ind, y_ind, theta_ind, s_ind);
+    torso_energy       = torso.B(x_ind, y_ind, theta_ind, s_ind);
+    head_energy        = head.B(x_ind, y_ind, theta_ind, s_ind);
     upper_arm_r_energy = upper_arm_r.B(x_ind, y_ind, theta_ind, s_ind);
     upper_arm_l_energy = upper_arm_l.B(x_ind, y_ind, theta_ind, s_ind);
 
     % compute the total energy
-    torso.B(x_ind, y_ind, theta_ind, s_ind) = ...
-        match_energy_cost(L, torso.part_id, dat_pt(:,torso.part_id)) + ...
-        head_energy + upper_arm_r_energy + upper_arm_l_energy; 
+    torso.B(x_ind, y_ind, theta_ind, s_ind) = torso_energy + head_energy + upper_arm_r_energy + upper_arm_l_energy; 
 
     % update the minimum value
     if (torso.B(x_ind, y_ind, theta_ind, s_ind) < torso_opt_E)
         torso_opt_E = torso.B(x_ind, y_ind, theta_ind, s_ind);
         torso_opt_L = [x_ind, y_ind, theta_ind, s_ind];
+        torso_opt_ind = l_ind;
     end
 end
 
