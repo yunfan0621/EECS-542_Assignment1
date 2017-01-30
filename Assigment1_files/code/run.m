@@ -11,8 +11,8 @@ startup;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % specify and read in the image
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-img_seq = 5;   % the sequence (index) of the image in the folder
-img_id  = 829; % the id of the image filename
+img_seq = 27;   % the sequence (index) of the image in the folder
+img_id  = 2207; % the id of the image filename
 img_filename  = sprintf('%06d.jpg', img_id);
 img_directory = fullfile('..', 'buffy_s5e2_original', img_filename);
 img = imread(img_directory);

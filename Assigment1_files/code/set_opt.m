@@ -3,8 +3,8 @@
 opt.scan_nsample.x = 50;
 opt.scan_nsample.y = 50;
 opt.scan_nsample.theta = 20;
-opt.scan_nsample.theta_max = pi;
-opt.scan_nsample.theta_min = -pi;
+opt.scan_nsample.theta_max = pi/2;
+opt.scan_nsample.theta_min = -pi/2;
 opt.scan_nsample.s = 10;
 opt.scan_nsample.s_min = 0.2;
 opt.scan_nsample.s_max = 2;
@@ -51,7 +51,7 @@ opt.model.s_ij(torso.part_id, upper_arm_l.part_id) = 1;
 
 % torso (li) -> head (lj)
 opt.model.x_ij(torso.part_id, head.part_id) = 0;
-opt.model.y_ij(torso.part_id, head.part_id) = -87.5;
+opt.model.y_ij(torso.part_id, head.part_id) = -80;
 opt.model.theta_ij(torso.part_id, head.part_id) = 0;
 opt.model.s_ij(torso.part_id, head.part_id) = 1;
 
@@ -69,6 +69,6 @@ opt.model.s_ij(upper_arm_l.part_id, torso.part_id) = 1;
 
 % head (li) -> torso (lj)
 opt.model.x_ij(head.part_id, torso.part_id) = 0;
-opt.model.y_ij(head.part_id, torso.part_id) = 37.5;
+opt.model.y_ij(head.part_id, torso.part_id) = 45;
 opt.model.theta_ij(head.part_id, torso.part_id) = 0;
 opt.model.s_ij(head.part_id, torso.part_id) = 1;
