@@ -518,9 +518,9 @@ upper_arm_r_corr = [upper_arm_r_x - upper_arm_r_s * opt.model.len(3)/2 * cos(upp
 total_corr = [torso_corr upper_arm_l_corr upper_arm_r_corr head_corr];
 
 % Draw stickman
-colors = [0.99 0 0 0; 0 0.99 0.99 0; 0 0 0 0.99];
+colors = [0.99 0 0.99 0; 0 0.99 0.99 0; 0 0 0 0.99];
 
-% torso - red; arms - green; head - blue
+% torso - red; left-upper-arm - green; right-upper-arm - yellow; head - blue
 thickness = 4;
 drawidx = true;
 drawfullskeleton = 1;
