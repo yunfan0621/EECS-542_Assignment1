@@ -818,7 +818,7 @@ upper_arm_r_corr = [upper_arm_r_x - upper_arm_r_s * opt.model.len(3)/2 * cos(upp
                     upper_arm_r_y + upper_arm_r_s * opt.model.len(3)/2 * sin(upper_arm_r_theta)];
 
 % lower_arm_r
-lower_arm_r_corr = lower_arm_r.Bj_p{upper_arm_r_ind};
+lower_arm_r_corr = lower_arm_r.Bj_p{upper_arm_r_opt_ind};
 lower_arm_r_x = lower_arm_r_corr(1);
 lower_arm_r_y = lower_arm_r_corr(2);
 lower_arm_r_theta = lower_arm_r_corr(3);
@@ -830,7 +830,7 @@ lower_arm_r_corr = [lower_arm_r_x - lower_arm_r_s * opt.model.len(5)/2 * cos(low
                     lower_arm_r_y + lower_arm_r_s * opt.model.len(5)/2 * sin(lower_arm_r_theta)];
 
 % lower_arm_l
-lower_arm_l_corr = lower_arm_l.Bj_p{upper_arm_l_ind};
+lower_arm_l_corr = lower_arm_l.Bj_p{upper_arm_l_opt_ind};
 lower_arm_l_x = lower_arm_l_corr(1);
 lower_arm_l_y = lower_arm_l_corr(2);
 lower_arm_l_theta = lower_arm_l_corr(3);
