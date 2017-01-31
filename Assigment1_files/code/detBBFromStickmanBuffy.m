@@ -1,4 +1,4 @@
-function bb = detBBFromStickman(stick,classname,params)
+function bb = detBBFromStickmanBuffy(stick,classname,params)
 % function minBB(stick,classname)
 % stick in format rows: [x1; y1; x2; y2] cols: nsticks
 % returns bb in format [minx miny maxx maxy]

@@ -8,14 +8,33 @@ fprintf('Initializing...\n');
 installmex;
 startup;
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% specify and read in the image
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-img_seq = 27;   % the sequence (index) of the image in the folder
-img_id  = 2207; % the id of the image filename
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% specify and read in the data
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Read in the image
+img_seq = 5;   % the sequence (index) of the image in the folder
+img_id  = 829; % the id of the image filename
 img_filename  = sprintf('%06d.jpg', img_id);
 img_directory = fullfile('..', 'buffy_s5e2_original', img_filename);
-img = imread(img_directory);
+img = im2double(imread(img_directory));
+[height, width, ~] = size(img);
+
+% Set up the color model and convert the image to Opponent Color Space
+set_color_model;
+fprintf('Computing heatmap for skin...\n');
+mean_skin_color_mat = repmat(mean_skin_color', height*width, 1);
+img_map = reshape(img, height*width, 3);
+img_map = 0.5 * dot(((img_map - mean_skin_color_mat) * inv(cov_skin_color))', (img_map - mean_skin_color_mat)');
+img_map = reshape(img_map, height, width);
+
+% Set up convolution kernel for parts
+set_part_kernel;
+img_map = imresize(img_map, 1.4);
+img_head_map = conv2(img_map, head_kernel, 'same');
+
+% truncate the cost map using upper bound
+max_map = 50;
+img_map(img_map > max_map) = max_map;
 
 % Read in the annotations
 % lF: 1 x 76 struct: <frame_id, coor 4x6 double>
@@ -53,9 +72,8 @@ upper_arm_l = struct('name',    'upper_arm_l',...
 set_opt;
 
 % Specify the search grid in each dimension
-[m, n, ~] = size(img);
-x_grid = linspace(1, n, opt.scan_nsample.x);
-y_grid = linspace(1, m, opt.scan_nsample.y);
+x_grid = linspace(1, width, opt.scan_nsample.x);
+y_grid = linspace(1, height, opt.scan_nsample.y);
 theta_grid = linspace(opt.scan_nsample.theta_min, opt.scan_nsample.theta_max, opt.scan_nsample.theta); % normalization???
 s_grid = linspace(opt.scan_nsample.s_min, opt.scan_nsample.s_max, opt.scan_nsample.s);
 
