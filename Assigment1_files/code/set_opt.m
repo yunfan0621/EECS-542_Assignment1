@@ -55,6 +55,18 @@ opt.model.y_ij(torso.part_id, head.part_id) = -80;
 opt.model.theta_ij(torso.part_id, head.part_id) = 0;
 opt.model.s_ij(torso.part_id, head.part_id) = 1;
 
+% upper_arm_r (li) -> lower_arm_r (lj)
+opt.model.x_ij(upper_arm_r.part_id, lower_arm_r.part_id) = 32.5;
+opt.model.y_ij(upper_arm_r.part_id, lower_arm_r.part_id) = 0;
+opt.model.theta_ij(upper_arm_r.part_id, lower_arm_r.part_id) = 0;
+opt.model.s_ij(upper_arm_r.part_id, lower_arm_r.part_id) = 1;
+
+% upper_arm_l (li) -> lower_arm_l (lj)
+opt.model.x_ij(upper_arm_l.part_id, lower_arm_l.part_id) = -32.5;
+opt.model.y_ij(upper_arm_l.part_id, lower_arm_l.part_id) = 0;
+opt.model.theta_ij(upper_arm_l.part_id, lower_arm_l.part_id) = 0;
+opt.model.s_ij(upper_arm_l.part_id, lower_arm_l.part_id) = 1;
+
 % upper_arm_r (li) -> torso (lj)
 opt.model.x_ij(upper_arm_r.part_id, torso.part_id) = -47.5;
 opt.model.y_ij(upper_arm_r.part_id, torso.part_id) = 0;
@@ -72,3 +84,16 @@ opt.model.x_ij(head.part_id, torso.part_id) = 0;
 opt.model.y_ij(head.part_id, torso.part_id) = 45;
 opt.model.theta_ij(head.part_id, torso.part_id) = 0;
 opt.model.s_ij(head.part_id, torso.part_id) = 1;
+
+% lower_arm_r (li) -> upper_arm_r (lj)
+opt.model.x_ij(lower_arm_r.part_id, upper_arm_r.part_id) = -32.5;
+opt.model.y_ij(lower_arm_r.part_id, upper_arm_r.part_id) = 0;
+opt.model.theta_ij(lower_arm_r.part_id, upper_arm_r.part_id) = 0;
+opt.model.s_ij(lower_arm_r.part_id, upper_arm_r.part_id) = 1;
+
+% lower_arm_l (li) -> upper_arm_l (lj)
+opt.model.x_ij(lower_arm_l.part_id, upper_arm_l.part_id) = 32.5;
+opt.model.y_ij(lower_arm_l.part_id, upper_arm_l.part_id) = 0;
+opt.model.theta_ij(lower_arm_l.part_id, upper_arm_l.part_id) = 0;
+opt.model.s_ij(lower_arm_l.part_id, upper_arm_l.part_id) = 1;
+

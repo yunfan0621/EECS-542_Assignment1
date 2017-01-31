@@ -108,10 +108,10 @@ T_torso_upper_arm_r = calc_Tij(torso.part_id, upper_arm_r.part_id, x_grid, y_gri
 T_upper_arm_l_lower_arm_l = calc_Tij(upper_arm_l.part_id, lower_arm_l.part_id, x_grid, y_grid, theta_grid, s_grid, opt);
 T_upper_arm_r_lower_arm_r = calc_Tij(upper_arm_r.part_id, lower_arm_r.part_id, x_grid, y_grid, theta_grid, s_grid, opt);
 
-%% Compute f(w) for distance transformation and initialize D for leave nodes
+%% Compute f(w) for distance transformation and initialize D for all leaf nodes
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% initializing D using f(w) for all leave node
+% initializing D using f(w) for all leaf nodes
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 fprintf('Initializing D using f(w) for all leave nodes...\n');
 
@@ -125,14 +125,10 @@ for l_ind = 1 : n_search % search for lj, each location of 'this' part
     
     torso.B(:, l_ind) = match_energy_cost(Lj, torso.part_id, dat_pt(:, torso.part_id));
     head.B(:, l_ind) = match_energy_cost(Lj, head.part_id, dat_pt(:, head.part_id));
-    upper_arm_l.B(:, l_ind) = match_energy_cost(Lj, upper_arm_l.part_id, dat_pt(:, upper_arm_l.part_id));
-    upper_arm_r.B(:, l_ind) = match_energy_cost(Lj, upper_arm_r.part_id, dat_pt(:, upper_arm_r.part_id));
     lower_arm_l.B(:, l_ind) = match_energy_cost(Lj, lower_arm_l.part_id, dat_pt(:, lower_arm_l.part_id));
     lower_arm_r.B(:, l_ind) = match_energy_cost(Lj, lower_arm_r.part_id, dat_pt(:, lower_arm_r.part_id));
     
     head.Bj_p{:, l_ind} = Lj;
-    upper_arm_l.Bj_p{:, l_ind} = Lj;
-    upper_arm_r.Bj_p{:, l_ind} = Lj;
     lower_arm_l.Bj_p{:, l_ind} = Lj;
     lower_arm_r.Bj_p{:, l_ind} = Lj;
 end
@@ -300,7 +296,7 @@ for l_ind = 1 : n_search
     lower_arm_r.Bj_p{Li} = lower_arm_r_neighbors_lj(lower_arm_r_min_ind, :);
 end
 
-%% Compute minimum distance in D for leave nodes (Backward Pass)
+%% Compute minimum distance in D for leaf nodes (Backward Pass)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Backward pass through D to find the minimum value
@@ -463,6 +459,28 @@ for l_ind = n_search : -1 : 1
     lower_arm_r.Bj_p{Li} = lower_arm_r_neighbors_lj(lower_arm_r_min_ind, :);
 end
 
+%% Compute f(w) for distance transformation and initialize D for all intermedial nodes
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% initializing D using f(w) for all intermedial nodes
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+fprintf('Initializing D using f(w) for all intermedial nodes...\n');
+
+for l_ind = 1 : n_search % search for lj, each location of 'this' part
+    
+    if (mod(l_ind, 50000) == 0)
+        fprintf('f(w) Initialization Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
+    end
+    
+    Lj = search_grid(:, l_ind)';
+    
+    torso.B(:, l_ind) = match_energy_cost(Lj, torso.part_id, dat_pt(:, torso.part_id));
+    upper_arm_l.B(:, l_ind) = match_energy_cost(Lj, upper_arm_l.part_id, dat_pt(:, upper_arm_l.part_id)) + lower_arm_l.B(:,l_ind);
+    upper_arm_r.B(:, l_ind) = match_energy_cost(Lj, upper_arm_r.part_id, dat_pt(:, upper_arm_r.part_id)) + lower_arm_r.B(:,l_ind);
+
+    upper_arm_l.Bj_p{:, l_ind} = Lj;
+    upper_arm_r.Bj_p{:, l_ind} = Lj;
+end
 
 %% Compute minimum distance in D for intermidal nodes (Forward Pass)
 
@@ -733,14 +751,25 @@ for l_ind = 1 : n_search % for each torso configuration
     head_energy  = head.B(l_ind);
     upper_arm_l_energy = upper_arm_l.B(l_ind);
     upper_arm_r_energy = upper_arm_r.B(l_ind);
+    
+    upper_arm_l_cor = upper_arm_l.Bj_p{l_ind};
+    upper_arm_r_cor = upper_arm_r.Bj_p{l_ind};
+    
+    [~,upper_arm_l_ind] = find(serach_grid == upper_arm_l_cor);
+    [~,upper_arm_r_ind] = find(serach_grid == upper_arm_r_cor);
+    lower_arm_l_energy = lower_arm_l.B{upper_arm_l_ind};
+    lower_arm_r_energy = lower_arm_r.B{upper_arm_r_ind};
 
     % compute the total energy
-    torso.B(l_ind) = torso_energy + head_energy + upper_arm_l_energy + upper_arm_r_energy; 
+    torso.B(l_ind) = torso_energy + head_energy + upper_arm_l_energy + upper_arm_r_energy ...
+        + lower_arm_r_energy + lower_arm_l_energy; 
 
     % update the minimum value
     if (torso.B(l_ind) < torso_opt_E)
         torso_opt_E = torso.B(l_ind);
         torso_opt_ind = l_ind;
+        upper_arm_r_opt_ind = upper_arm_r_ind;
+        upper_arm_l_opt_ind = upper_arm_l_ind;
     end
 end
 
@@ -793,13 +822,36 @@ upper_arm_r_corr = [upper_arm_r_x - upper_arm_r_s * opt.model.len(3)/2 * cos(upp
                     upper_arm_r_x + upper_arm_r_s * opt.model.len(3)/2 * cos(upper_arm_r_theta); ...
                     upper_arm_r_y + upper_arm_r_s * opt.model.len(3)/2 * sin(upper_arm_r_theta)];
 
-% 4 part corr
-total_corr = [torso_corr upper_arm_l_corr upper_arm_r_corr head_corr];
+% lower_arm_r
+lower_arm_r_corr = lower_arm_r.Bj_p{upper_arm_r_ind};
+lower_arm_r_x = lower_arm_r_corr(1);
+lower_arm_r_y = lower_arm_r_corr(2);
+lower_arm_r_theta = lower_arm_r_corr(3);
+lower_arm_r_s = lower_arm_r_corr(4);
+
+lower_arm_r_corr = [lower_arm_r_x - lower_arm_r_s * opt.model.len(5)/2 * cos(lower_arm_r_theta); ...
+                    lower_arm_r_y - lower_arm_r_s * opt.model.len(5)/2 * sin(lower_arm_r_theta); ...
+                    lower_arm_r_x + lower_arm_r_s * opt.model.len(5)/2 * cos(lower_arm_r_theta); ...
+                    lower_arm_r_y + lower_arm_r_s * opt.model.len(5)/2 * sin(lower_arm_r_theta)];
+
+% upper_arm_l
+lower_arm_l_corr = lower_arm_l.Bj_p{upper_arm_l_ind};
+lower_arm_l_x = lower_arm_l_corr(1);
+lower_arm_l_y = lower_arm_l_corr(2);
+lower_arm_l_theta = lower_arm_l_corr(3);
+lower_arm_l_s = lower_arm_l_corr(4);
+
+lower_arm_l_corr = [lower_arm_l_x - lower_arm_l_s * opt.model.len(4)/2 * cos(lower_arm_l_theta); ...
+                    lower_arm_l_y - lower_arm_l_s * opt.model.len(4)/2 * sin(lower_arm_l_theta); ...
+                    lower_arm_l_x + lower_arm_l_s * opt.model.len(4)/2 * cos(lower_arm_l_theta); ...
+                    lower_arm_l_y + lower_arm_l_s * opt.model.len(4)/2 * sin(lower_arm_l_theta)];
+% 6 part corr
+total_corr = [torso_corr upper_arm_l_corr upper_arm_r_corr lower_arm_l_corr lower_arm_r_corr head_corr];
 
 % Draw stickman
-colors = [0.99 0 0.99 0; 0 0.99 0.99 0; 0 0 0 0.99];
+colors = [0.99 0 0 0.99 0.99 0; 0 0.99 0.99 0.99 0.99 0; 0 0 0 0 0 0.99];
 
-% torso - red; left-upper-arm - green; right-upper-arm - yellow; head - blue
+% torso - red; upper-arms - green; lower-arms - yellow; head - blue
 thickness = 4;
 drawidx = true;
 drawfullskeleton = 1;
