@@ -113,7 +113,7 @@ T_upper_arm_r_lower_arm_r = calc_Tij(upper_arm_r.part_id, lower_arm_r.part_id, x
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % initializing D using f(w) for all leaf nodes
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-fprintf('Initializing D using f(w) for all leave nodes...\n');
+fprintf('Initializing D using f(w) for all leaf nodes...\n');
 
 for l_ind = 1 : n_search % search for lj, each location of 'this' part
     
@@ -133,18 +133,18 @@ for l_ind = 1 : n_search % search for lj, each location of 'this' part
     lower_arm_r.Bj_p{:, l_ind} = Lj;
 end
 
-%% Compute minimum distance in D for leave nodes (Forward Pass)
+%% Compute minimum distance in D for leaf nodes (Forward Pass)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Forward pass through D to find the minimum value
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-fprintf('\nForward pass through D for all leave nodes...\n');
+fprintf('\nForward pass through D for all leaf nodes...\n');
 for l_ind = 1 : n_search 
     % search for all possibilities of Li, increase (x,y,theta,s) in order
 
     if (mod(l_ind, 5000) == 0)
-        fprintf('Leave Node Forward Pass Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
+        fprintf('Leaf Node Forward Pass Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
     end
     
     % initialize neighbor vectors
@@ -302,12 +302,12 @@ end
 % Backward pass through D to find the minimum value
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-fprintf('\nBackward pass through D for all leave nodes...\n');
+fprintf('\nBackward pass through D for all leaf nodes...\n');
 for l_ind = n_search : -1 : 1    
     % search for all possibilities of Li, decrease (x,y,theta,s) in order
     
     if (mod(l_ind, 5000) == 0)
-        fprintf('Leave Node Backward Pass Progress: %.0f%%\n', 100*(n_search-l_ind+5000)/size(search_grid, 2)); 
+        fprintf('Leaf Node Backward Pass Progress: %.0f%%\n', 100*(n_search-l_ind+5000)/size(search_grid, 2)); 
     end
     
     % calculate linear lindex
@@ -493,7 +493,7 @@ for l_ind = 1 : n_search
     % search for all possibilities of Li, increase (x,y,theta,s) in order
 
     if (mod(l_ind, 5000) == 0)
-        fprintf('Leave Node Forward Pass Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
+        fprintf('Leaf Node Forward Pass Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
     end
     
     % initialize neighbor vectors
@@ -616,12 +616,12 @@ end
 % Backward pass through D to find the minimum value
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-fprintf('\nBackward pass through D for all leave nodes...\n');
+fprintf('\nBackward pass through D for all Leaf nodes...\n');
 for l_ind = n_search : -1 : 1    
     % search for all possibilities of Li, decrease (x,y,theta,s) in order
     
     if (mod(l_ind, 5000) == 0)
-        fprintf('Leave Node Backward Pass Progress: %.0f%%\n', 100*(n_search-l_ind+5000)/size(search_grid, 2)); 
+        fprintf('Leaf Node Backward Pass Progress: %.0f%%\n', 100*(n_search-l_ind+5000)/size(search_grid, 2)); 
     end
     
     % calculate linear lindex
@@ -755,10 +755,11 @@ for l_ind = 1 : n_search % for each torso configuration
     upper_arm_l_cor = upper_arm_l.Bj_p{l_ind};
     upper_arm_r_cor = upper_arm_r.Bj_p{l_ind};
     
-    [~,upper_arm_l_ind] = find(serach_grid == upper_arm_l_cor);
-    [~,upper_arm_r_ind] = find(serach_grid == upper_arm_r_cor);
-    lower_arm_l_energy = lower_arm_l.B{upper_arm_l_ind};
-    lower_arm_r_energy = lower_arm_r.B{upper_arm_r_ind};
+    tmp_grid = search_grid';
+    upper_arm_l_ind = find(ismember(tmp_grid,upper_arm_l_cor),1);
+    upper_arm_r_ind = find(ismember(tmp_grid,upper_arm_r_cor),1);
+    lower_arm_l_energy = lower_arm_l.B(upper_arm_l_ind);
+    lower_arm_r_energy = lower_arm_r.B(upper_arm_r_ind);
 
     % compute the total energy
     torso.B(l_ind) = torso_energy + head_energy + upper_arm_l_energy + upper_arm_r_energy ...
