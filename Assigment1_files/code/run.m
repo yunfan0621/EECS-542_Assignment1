@@ -11,8 +11,8 @@ startup;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % specify and read in the image
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-img_seq = 27;   % the sequence (index) of the image in the folder
-img_id  = 2207; % the id of the image filename
+img_seq = 1;   % the sequence (index) of the image in the folder
+img_id  = 63; % the id of the image filename
 img_filename  = sprintf('%06d.jpg', img_id);
 img_directory = fullfile('..', 'buffy_s5e2_original', img_filename);
 img = imread(img_directory);
@@ -493,7 +493,7 @@ for l_ind = 1 : n_search
     % search for all possibilities of Li, increase (x,y,theta,s) in order
 
     if (mod(l_ind, 5000) == 0)
-        fprintf('Leaf Node Forward Pass Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
+        fprintf('Intermidal Node Forward Pass Progress: %.0f%%\n', 100*l_ind/size(search_grid, 2)); 
     end
     
     % initialize neighbor vectors
@@ -616,12 +616,12 @@ end
 % Backward pass through D to find the minimum value
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-fprintf('\nBackward pass through D for all Leaf nodes...\n');
+fprintf('\nBackward pass through D for all intermidal nodes...\n');
 for l_ind = n_search : -1 : 1    
     % search for all possibilities of Li, decrease (x,y,theta,s) in order
     
     if (mod(l_ind, 5000) == 0)
-        fprintf('Leaf Node Backward Pass Progress: %.0f%%\n', 100*(n_search-l_ind+5000)/size(search_grid, 2)); 
+        fprintf('Intermidal Node Backward Pass Progress: %.0f%%\n', 100*(n_search-l_ind+5000)/size(search_grid, 2)); 
     end
     
     % calculate linear lindex
@@ -751,30 +751,24 @@ for l_ind = 1 : n_search % for each torso configuration
     head_energy  = head.B(l_ind);
     upper_arm_l_energy = upper_arm_l.B(l_ind);
     upper_arm_r_energy = upper_arm_r.B(l_ind);
-    
-    upper_arm_l_cor = upper_arm_l.Bj_p{l_ind};
-    upper_arm_r_cor = upper_arm_r.Bj_p{l_ind};
-    
-    tmp_grid = search_grid';
-    upper_arm_l_ind = find(ismember(tmp_grid,upper_arm_l_cor),1);
-    upper_arm_r_ind = find(ismember(tmp_grid,upper_arm_r_cor),1);
-    lower_arm_l_energy = lower_arm_l.B(upper_arm_l_ind);
-    lower_arm_r_energy = lower_arm_r.B(upper_arm_r_ind);
 
     % compute the total energy
-    torso.B(l_ind) = torso_energy + head_energy + upper_arm_l_energy + upper_arm_r_energy ...
-        + lower_arm_r_energy + lower_arm_l_energy; 
+    torso.B(l_ind) = torso_energy + head_energy + upper_arm_l_energy + upper_arm_r_energy;
 
     % update the minimum value
     if (torso.B(l_ind) < torso_opt_E)
         torso_opt_E = torso.B(l_ind);
         torso_opt_ind = l_ind;
-        upper_arm_r_opt_ind = upper_arm_r_ind;
-        upper_arm_l_opt_ind = upper_arm_l_ind;
     end
 end
 
 %% Obtain the coordinate of each node
+upper_arm_l_cor = upper_arm_l.Bj_p{torso_opt_ind};
+upper_arm_r_cor = upper_arm_r.Bj_p{torso_opt_ind};
+tmp_grid = search_grid';
+upper_arm_r_opt_ind = find(all(tmp_grid==repmat(upper_arm_l_cor,size(tmp_grid,1),1),2),1); 
+upper_arm_l_opt_ind = find(all(tmp_grid==repmat(upper_arm_r_cor,size(tmp_grid,1),1),2),1); 
+    
 % torso
 torso_corr = search_grid(:, torso_opt_ind);
 torso_x = torso_corr(1);
@@ -835,7 +829,7 @@ lower_arm_r_corr = [lower_arm_r_x - lower_arm_r_s * opt.model.len(5)/2 * cos(low
                     lower_arm_r_x + lower_arm_r_s * opt.model.len(5)/2 * cos(lower_arm_r_theta); ...
                     lower_arm_r_y + lower_arm_r_s * opt.model.len(5)/2 * sin(lower_arm_r_theta)];
 
-% upper_arm_l
+% lower_arm_l
 lower_arm_l_corr = lower_arm_l.Bj_p{upper_arm_l_ind};
 lower_arm_l_x = lower_arm_l_corr(1);
 lower_arm_l_y = lower_arm_l_corr(2);
@@ -852,7 +846,7 @@ total_corr = [torso_corr upper_arm_l_corr upper_arm_r_corr lower_arm_l_corr lowe
 % Draw stickman
 colors = [0.99 0 0 0.99 0.99 0; 0 0.99 0.99 0.99 0.99 0; 0 0 0 0 0 0.99];
 
-% torso - red; upper-arms - green; lower-arms - yellow; head - blue
+% torso - red; upper_arms - green; lower_arms - yellow; head - blue
 thickness = 4;
 drawidx = true;
 drawfullskeleton = 1;
