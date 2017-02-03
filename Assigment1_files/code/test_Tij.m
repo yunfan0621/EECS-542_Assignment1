@@ -51,6 +51,7 @@ j = 6;
 Tij = calc_Tij(i, j, x_grid, y_grid, theta_grid, s_grid, opt);
 Tij_test = zeros(4, total_size);
 k = 1;
+tic;
 for s_ind = 1:length(s_grid)
     for theta_ind = 1:length(theta_grid)
         for y_ind = 1:length(y_grid)
@@ -73,6 +74,7 @@ for s_ind = 1:length(s_grid)
         end
     end
 end
+toc;
 D = (Tij - Tij_test).^2;
 error = sum(D(:));
 if (error < 1e-6)
